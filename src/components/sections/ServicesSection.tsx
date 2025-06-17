@@ -27,7 +27,7 @@ function ServiceModal({ service, isOpen, onClose }: ServiceModalProps) {
           <h3 className="text-3xl font-bold text-white">{service.title}</h3>
           <button
             onClick={onClose}
-            className="text-cool-gray hover:text-white transition-colors p-2"
+            className="text-[#64748b] hover:text-white transition-colors p-2"
           >
             <svg
               className="w-6 h-6"
@@ -53,19 +53,19 @@ function ServiceModal({ service, isOpen, onClose }: ServiceModalProps) {
             className="w-16 h-16 object-contain"
           />
         </div>
-        <p className="text-cool-gray text-lg mb-6 leading-relaxed">
+        <p className="text-[#64748b] text-lg mb-6 leading-relaxed">
           {service.fullDescription || service.details}
         </p>
         {service.features && (
           <div className="mb-6">
-            <h4 className="text-xl font-semibold text-brand-teal mb-4">
+            <h4 className="text-xl font-semibold text-[#6bdcc0] mb-4">
               Key Features:
             </h4>
             <ul className="space-y-2">
               {service.features.map((feature: string, index: number) => (
-                <li key={index} className="flex items-start text-cool-gray">
+                <li key={index} className="flex items-start text-[#64748b]">
                   <svg
-                    className="w-4 h-4 text-brand-teal mr-3 mt-1 flex-shrink-0"
+                    className="w-4 h-4 text-[#6bdcc0] mr-3 mt-1 flex-shrink-0"
                     fill="none"
                     stroke="currentColor"
                     viewBox="0 0 24 24"
@@ -114,7 +114,7 @@ const ServicesSection: React.FC = () => {
             <h2 className="text-4xl md:text-5xl font-bold text-white mb-6">
               What We <span className="gradient-text">Offer</span>
             </h2>
-            <p className="text-xl text-cool-gray max-w-3xl mx-auto">
+            <p className="text-xl text-[#64748b] max-w-3xl mx-auto">
               Comprehensive digital solutions tailored to your business needs
             </p>
           </div>
@@ -123,7 +123,7 @@ const ServicesSection: React.FC = () => {
             {SERVICES.map((service, index) => (
               <div
                 key={index}
-                className="p-8 rounded-xl cursor-pointer group transition-all duration-300 ease-in-out bg-slate-blue/50 border border-brand-teal/10 hover:-translate-y-2 hover:bg-slate-blue/80 hover:border-brand-teal/30 hover:shadow-2xl"
+                className="p-8 rounded-xl cursor-pointer group transition-all duration-300 ease-in-out bg-[#1e293b]/50 border border-[#6bdcc0]/10 hover:-translate-y-2 hover:bg-[#1e293b]/80 hover:border-[#6bdcc0]/30 hover:shadow-2xl"
                 onClick={() => openModal(service)}
               >
                 <div className="mb-6">
@@ -135,13 +135,13 @@ const ServicesSection: React.FC = () => {
                     className="w-16 h-16 object-contain"
                   />
                 </div>
-                <h3 className="text-2xl font-bold text-white mb-4 group-hover:text-brand-teal transition-colors">
+                <h3 className="text-2xl font-bold text-white mb-4 group-hover:text-[#6bdcc0] transition-colors">
                   {service.title}
                 </h3>
-                <p className="text-cool-gray leading-relaxed mb-6">
+                <p className="text-[#64748b] leading-relaxed mb-6">
                   {service.description}
                 </p>
-                <div className="flex items-center text-brand-teal font-semibold">
+                <div className="flex items-center text-[#6bdcc0] font-semibold">
                   <span>Learn More</span>
                   <svg
                     className="w-4 h-4 ml-2 group-hover:translate-x-1 transition-transform"

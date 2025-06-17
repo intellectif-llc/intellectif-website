@@ -20,13 +20,13 @@ export default function Button({
   disabled,
   ...props
 }: ButtonProps) {
-  const baseClasses = `inline-flex items-center justify-center font-medium transition-all duration-300 ease-out focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-teal disabled:opacity-50 disabled:cursor-not-allowed relative overflow-hidden`;
+  const baseClasses = `inline-flex items-center justify-center font-medium transition-all duration-300 ease-out focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#6bdcc0] disabled:opacity-50 disabled:cursor-not-allowed relative overflow-hidden`;
 
   const variantClasses = {
-    primary: `bg-gradient-to-r from-brand-teal to-neon-cyan text-midnight-navy font-semibold hover:scale-105 hover:shadow-lg shadow-lg`,
-    secondary: `bg-electric-blue text-white font-semibold hover:bg-neon-cyan hover:scale-105 shadow-lg`,
-    outline: `border-2 border-brand-teal text-brand-teal bg-transparent font-semibold hover:bg-brand-teal hover:text-midnight-navy hover:scale-105 shadow-lg`,
-    ghost: `text-brand-teal bg-transparent font-medium hover:bg-brand-teal hover:bg-opacity-10 hover:text-neon-cyan`,
+    primary: `bg-gradient-to-r from-[#6bdcc0] to-[#22d3ee] text-[#051028] font-semibold hover:scale-105 hover:shadow-lg shadow-lg`,
+    secondary: `bg-[#0ea5e9] text-white font-semibold hover:bg-[#22d3ee] hover:scale-105 shadow-lg`,
+    outline: `border-2 border-[#6bdcc0] text-[#6bdcc0] bg-transparent font-semibold hover:bg-[#6bdcc0] hover:text-[#051028] hover:scale-105 shadow-lg`,
+    ghost: `text-[#6bdcc0] bg-transparent font-medium hover:bg-[#6bdcc0] hover:bg-opacity-10 hover:text-[#22d3ee]`,
   };
 
   const sizeClasses = {

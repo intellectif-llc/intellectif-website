@@ -10,17 +10,6 @@ export default {
   ],
   theme: {
     extend: {
-      colors: {
-        "midnight-navy": "#051028",
-        "brand-teal": "#6bdcc0",
-        "electric-blue": "#0ea5e9",
-        "neon-cyan": "#22d3ee",
-        "coral-pink": "#f472b6",
-        "lime-green": "#84cc16",
-        "slate-blue": "#1e293b",
-        "cool-gray": "#64748b",
-        "light-blue-gray": "#f1f5f9",
-      },
       dropShadow: {
         "neon-teal": "0 0 8px rgba(107, 220, 192, 0.5)",
         "neon-teal-lg": "0 0 12px rgba(107, 220, 192, 0.8)",

@@ -16,7 +16,7 @@ const TechStackItem: React.FC<TechStackItemProps> = ({ name, icon }) => {
         height={48}
         className="h-12 w-12 object-contain transition-all duration-300 grayscale group-hover:grayscale-0 group-hover:scale-110 drop-shadow-neon-teal group-hover:drop-shadow-neon-teal-lg"
       />
-      <p className="mt-4 text-center text-cool-gray font-medium text-sm opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+      <p className="mt-4 text-center text-[#64748b] font-medium text-sm opacity-0 group-hover:opacity-100 transition-opacity duration-300">
         {name}
       </p>
     </div>

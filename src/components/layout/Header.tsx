@@ -28,7 +28,7 @@ export default function Header() {
         fixed top-0 left-0 right-0 z-50 transition-all duration-300
         ${
           isScrolled
-            ? "bg-midnight-navy bg-opacity-95 backdrop-blur-sm shadow-lg"
+            ? "bg-[#051028] bg-opacity-95 backdrop-blur-sm shadow-lg"
             : "bg-transparent"
         }
       `}
@@ -47,7 +47,7 @@ export default function Header() {
               height={48}
               className="w-12 h-12 object-contain"
             />
-            <span className="text-xl font-bold text-brand-teal">
+            <span className="text-xl font-bold text-[#6bdcc0]">
               Intellectif
             </span>
           </Link>
@@ -59,10 +59,10 @@ export default function Header() {
                 key={item.label}
                 href={item.href}
                 className="
-                  relative text-white hover:text-brand-teal
+                  relative text-white hover:text-[#6bdcc0]
                   transition-all duration-300
                   py-2 px-4 rounded-lg
-                  hover:bg-brand-teal hover:bg-opacity-10
+                  hover:bg-[#6bdcc0] hover:bg-opacity-10
                 "
               >
                 {item.label}
@@ -102,7 +102,7 @@ export default function Header() {
             isMenuOpen ? "max-h-96 opacity-100 mt-6" : "max-h-0 opacity-0 mt-0"
           }`}
         >
-          <nav className="bg-slate-blue bg-opacity-95 backdrop-blur-sm rounded-2xl p-6 border border-brand-teal/20 shadow-xl">
+          <nav className="bg-[#1e293b] bg-opacity-95 backdrop-blur-sm rounded-2xl p-6 border border-[#6bdcc0]/20 shadow-xl">
             <ul className="space-y-4">
               {NAVIGATION_ITEMS.map((item, index) => (
                 <li
@@ -120,8 +120,8 @@ export default function Header() {
                       block w-full text-left px-4 py-3 rounded-lg
                       text-white border border-transparent
                       transition-all duration-300
-                      hover:text-brand-teal hover:bg-brand-teal hover:bg-opacity-10
-                      hover:border-brand-teal hover:border-opacity-30
+                      hover:text-[#6bdcc0] hover:bg-[#6bdcc0] hover:bg-opacity-10
+                      hover:border-[#6bdcc0] hover:border-opacity-30
                     "
                   >
                     {item.label}

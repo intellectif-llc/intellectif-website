@@ -53,8 +53,8 @@ html {
 body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  background-color: #051028; /* midnight-navy */
-  color: #ffffff; /* white */
+  background-color: #051028;
+  color: #ffffff;
 }
 
 /* Utility classes */
