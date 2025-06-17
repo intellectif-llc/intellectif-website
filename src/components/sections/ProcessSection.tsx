@@ -108,10 +108,13 @@ const ProcessSection: React.FC = () => {
           {PROCESS_STEPS.map((step) => (
             <div
               key={step.id}
-              className="text-center transition-transform duration-300 ease-in-out hover:-translate-y-2"
+              className="group text-center transition-transform duration-300 ease-in-out hover:-translate-y-2"
             >
-              <div className="w-16 h-16 mx-auto mb-6 bg-[#1e293b] rounded-full flex items-center justify-center text-[#6bdcc0] border-2 border-[#6bdcc0]/30 transition-all duration-300 group-hover:bg-gradient-to-r group-hover:from-[#6bdcc0] group-hover:to-[#22d3ee] group-hover:text-[#051028]">
-                {getStepIcon(step.icon)}
+              <div className="w-16 h-16 mx-auto mb-6 bg-[#1e293b] rounded-full flex items-center justify-center text-[#6bdcc0] border-2 border-[#6bdcc0]/30 transition-all duration-300 ease-out relative overflow-hidden hover:scale-105 transform">
+                <span className="relative z-10 transition-colors duration-300 group-hover:text-white">
+                  {getStepIcon(step.icon)}
+                </span>
+                <div className="absolute inset-0 bg-gradient-to-r from-[#22d3ee] to-[#0ea5e9] opacity-0 group-hover:opacity-100 transition-opacity duration-300 ease-out rounded-full"></div>
               </div>
               <div className="mb-4">
                 <span className="text-sm font-semibold text-[#6bdcc0] uppercase tracking-wider">

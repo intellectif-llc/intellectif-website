@@ -59,13 +59,16 @@ export default function Header() {
                 key={item.label}
                 href={item.href}
                 className="
-                  relative text-white hover:text-[#6bdcc0]
-                  transition-all duration-300
+                  group relative text-white font-medium
+                  transition-all duration-300 ease-out
                   py-2 px-4 rounded-lg
-                  hover:bg-[#6bdcc0] hover:bg-opacity-10
+                  hover:text-[#051028] hover:scale-105
+                  transform hover:-translate-y-0.5
+                  overflow-hidden
                 "
               >
-                {item.label}
+                <span className="relative z-10">{item.label}</span>
+                <div className="absolute inset-0 bg-gradient-to-r from-[#6bdcc0] to-[#22d3ee] opacity-0 group-hover:opacity-100 transition-opacity duration-300 ease-out rounded-lg"></div>
               </Link>
             ))}
           </nav>
@@ -117,14 +120,16 @@ export default function Header() {
                   <Link
                     href={item.href}
                     className="
-                      block w-full text-left px-4 py-3 rounded-lg
-                      text-white border border-transparent
-                      transition-all duration-300
-                      hover:text-[#6bdcc0] hover:bg-[#6bdcc0] hover:bg-opacity-10
-                      hover:border-[#6bdcc0] hover:border-opacity-30
+                      group block w-full text-left px-4 py-3 rounded-lg
+                      text-white font-medium border border-transparent
+                      transition-all duration-300 ease-out
+                      hover:text-[#051028] hover:scale-105
+                      transform hover:-translate-y-0.5
+                      relative overflow-hidden
                     "
                   >
-                    {item.label}
+                    <span className="relative z-10">{item.label}</span>
+                    <div className="absolute inset-0 bg-gradient-to-r from-[#6bdcc0] to-[#22d3ee] opacity-0 group-hover:opacity-100 transition-opacity duration-300 ease-out rounded-lg"></div>
                   </Link>
                 </li>
               ))}

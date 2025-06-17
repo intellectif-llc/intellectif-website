@@ -27,21 +27,24 @@ function ServiceModal({ service, isOpen, onClose }: ServiceModalProps) {
           <h3 className="text-3xl font-bold text-white">{service.title}</h3>
           <button
             onClick={onClose}
-            className="text-[#64748b] hover:text-white transition-colors p-2"
+            className="group relative w-10 h-10 rounded-lg flex items-center justify-center text-[#64748b] transition-all duration-300 ease-out hover:scale-105 hover:-translate-y-0.5 transform overflow-hidden"
           >
-            <svg
-              className="w-6 h-6"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M6 18L18 6M6 6l12 12"
-              />
-            </svg>
+            <span className="relative z-10 transition-colors duration-300 group-hover:text-white">
+              <svg
+                className="w-6 h-6"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M6 18L18 6M6 6l12 12"
+                />
+              </svg>
+            </span>
+            <div className="absolute inset-0 bg-gradient-to-r from-[#22d3ee] to-[#0ea5e9] opacity-0 group-hover:opacity-100 transition-opacity duration-300 ease-out rounded-lg"></div>
           </button>
         </div>
         <div className="mb-6">
