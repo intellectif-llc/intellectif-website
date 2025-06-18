@@ -10,7 +10,7 @@ const HeroSection: React.FC = () => {
   }, []);
 
   return (
-    <section className="min-h-screen flex items-center justify-center relative overflow-hidden">
+    <section className="min-h-screen flex items-center justify-center relative overflow-hidden pt-20 md:pt-0">
       {/* Animated background elements */}
       <div className="absolute inset-0 overflow-hidden">
         <div className="absolute top-1/4 left-1/4 w-64 h-64 bg-[#6bdcc0] opacity-10 rounded-full blur-3xl animate-pulse"></div>
@@ -24,29 +24,29 @@ const HeroSection: React.FC = () => {
         ></div>
       </div>
 
-      <div className="container mx-auto px-4 text-center relative z-10">
+      <div className="container mx-auto px-4 sm:px-6 lg:px-8 text-center relative z-10">
         <div
           className={`transition-all duration-1000 ${
             isVisible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-8"
           }`}
         >
-          <h1 className="text-5xl md:text-7xl font-bold mb-6 leading-tight">
-            <span className="block text-white mb-2">
+          <h1 className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-bold mb-6 sm:mb-8 leading-tight px-2">
+            <span className="block text-white mb-2 sm:mb-4">
               Transform Your Digital
             </span>
             <span className="block gradient-text">Vision Into Reality</span>
           </h1>
 
-          <p className="text-xl md:text-2xl text-[#64748b] mb-8 max-w-3xl mx-auto leading-relaxed">
+          <p className="text-lg sm:text-xl md:text-2xl text-[#64748b] mb-8 sm:mb-10 md:mb-12 max-w-3xl mx-auto leading-relaxed px-4">
             We specialize in cutting-edge web development, cloud solutions, and
             AI integration to help your business thrive in the digital
             landscape.
           </p>
 
-          <div className="flex flex-col sm:flex-row gap-6 justify-center items-center">
+          <div className="flex flex-col sm:flex-row gap-4 sm:gap-6 justify-center items-center px-4">
             <a
               href="/contact"
-              className="group relative inline-flex items-center justify-center px-10 py-4 text-lg font-bold rounded-2xl transition-all duration-500 ease-out hover:scale-[1.02] shadow-xl focus:outline-none focus:ring-4 focus:ring-[#6bdcc0]/30 focus:ring-offset-2 focus:ring-offset-[#051028] transform hover:-translate-y-2 overflow-hidden border-2 border-transparent hover:border-[#6bdcc0] hover:shadow-2xl backdrop-blur-sm"
+              className="group relative inline-flex items-center justify-center w-full sm:w-auto px-8 sm:px-10 py-4 text-base sm:text-lg font-bold rounded-2xl transition-all duration-500 ease-out hover:scale-[1.02] shadow-xl focus:outline-none focus:ring-4 focus:ring-[#6bdcc0]/30 focus:ring-offset-2 focus:ring-offset-[#051028] transform hover:-translate-y-2 overflow-hidden border-2 border-transparent hover:border-[#6bdcc0] hover:shadow-2xl backdrop-blur-sm"
               style={{
                 background:
                   "linear-gradient(135deg, #6bdcc0 0%, #22d3ee 50%, #0ea5e9 100%)",
@@ -90,7 +90,7 @@ const HeroSection: React.FC = () => {
 
             <a
               href="/solutions"
-              className="group relative inline-flex items-center justify-center px-10 py-4 text-lg font-bold text-[#6bdcc0] rounded-2xl transition-all duration-500 ease-out hover:scale-[1.02] shadow-xl focus:outline-none focus:ring-4 focus:ring-[#6bdcc0]/30 focus:ring-offset-2 focus:ring-offset-[#051028] transform hover:-translate-y-2 overflow-hidden border-2 backdrop-blur-sm"
+              className="group relative inline-flex items-center justify-center w-full sm:w-auto px-8 sm:px-10 py-4 text-base sm:text-lg font-bold text-[#6bdcc0] rounded-2xl transition-all duration-500 ease-out hover:scale-[1.02] shadow-xl focus:outline-none focus:ring-4 focus:ring-[#6bdcc0]/30 focus:ring-offset-2 focus:ring-offset-[#051028] transform hover:-translate-y-2 overflow-hidden border-2 backdrop-blur-sm"
               style={{
                 background: "rgba(30, 41, 59, 0.4)",
                 border: "2px solid #6bdcc0",

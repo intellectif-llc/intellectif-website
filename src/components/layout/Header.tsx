@@ -53,22 +53,51 @@ export default function Header() {
           </Link>
 
           {/* Desktop Navigation */}
-          <nav className="hidden md:flex items-center space-x-8">
+          <nav className="hidden md:flex items-center space-x-6">
             {NAVIGATION_ITEMS.map((item) => (
               <Link
                 key={item.label}
                 href={item.href}
                 className="
                   group relative text-white font-medium
-                  transition-all duration-300 ease-out
-                  py-2 px-4 rounded-lg
-                  hover:text-[#051028] hover:scale-105
-                  transform hover:-translate-y-0.5
-                  overflow-hidden
+                  transition-all duration-500 ease-out
+                  py-3 px-5 rounded-xl
+                  hover:scale-[1.02] transform hover:-translate-y-1
+                  overflow-hidden backdrop-blur-sm
                 "
+                style={{
+                  background: "rgba(30, 41, 59, 0.3)",
+                  border: "1px solid rgba(107, 220, 192, 0.2)",
+                  boxShadow: "0 4px 16px rgba(107, 220, 192, 0.1)",
+                }}
               >
-                <span className="relative z-10">{item.label}</span>
-                <div className="absolute inset-0 bg-gradient-to-r from-[#6bdcc0] to-[#22d3ee] opacity-0 group-hover:opacity-100 transition-opacity duration-300 ease-out rounded-lg"></div>
+                <span className="relative z-20 transition-all duration-500 group-hover:text-[#051028] font-semibold tracking-wide drop-shadow-sm">
+                  {item.label}
+                </span>
+                <div
+                  className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-all duration-500 ease-out rounded-xl"
+                  style={{
+                    background:
+                      "linear-gradient(135deg, #6bdcc0 0%, #22d3ee 50%, #0ea5e9 100%)",
+                    boxShadow: "inset 0 1px 0 rgba(255, 255, 255, 0.2)",
+                  }}
+                ></div>
+
+                {/* Enhanced glow on hover */}
+                <div
+                  className="absolute inset-0 rounded-xl opacity-0 group-hover:opacity-100 transition-all duration-500 ease-out pointer-events-none"
+                  style={{
+                    boxShadow: `
+                      0 0 20px rgba(107, 220, 192, 0.6),
+                      0 0 40px rgba(107, 220, 192, 0.3)
+                    `,
+                  }}
+                ></div>
+
+                {/* Subtle shimmer effect */}
+                <div className="absolute inset-0 opacity-0 group-hover:opacity-20 transition-opacity duration-700">
+                  <div className="absolute inset-0 -skew-x-12 bg-gradient-to-r from-transparent via-white/20 to-transparent animate-pulse"></div>
+                </div>
               </Link>
             ))}
           </nav>
@@ -120,16 +149,45 @@ export default function Header() {
                   <Link
                     href={item.href}
                     className="
-                      group block w-full text-left px-4 py-3 rounded-lg
+                      group block w-full text-left px-5 py-4 rounded-xl
                       text-white font-medium border border-transparent
-                      transition-all duration-300 ease-out
-                      hover:text-[#051028] hover:scale-105
-                      transform hover:-translate-y-0.5
-                      relative overflow-hidden
+                      transition-all duration-500 ease-out
+                      hover:scale-[1.02] transform hover:-translate-y-1
+                      relative overflow-hidden backdrop-blur-sm
                     "
+                    style={{
+                      background: "rgba(30, 41, 59, 0.6)",
+                      border: "1px solid rgba(107, 220, 192, 0.3)",
+                      boxShadow: "0 4px 16px rgba(107, 220, 192, 0.2)",
+                    }}
                   >
-                    <span className="relative z-10">{item.label}</span>
-                    <div className="absolute inset-0 bg-gradient-to-r from-[#6bdcc0] to-[#22d3ee] opacity-0 group-hover:opacity-100 transition-opacity duration-300 ease-out rounded-lg"></div>
+                    <span className="relative z-20 transition-all duration-500 group-hover:text-[#051028] font-semibold tracking-wide drop-shadow-sm">
+                      {item.label}
+                    </span>
+                    <div
+                      className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-all duration-500 ease-out rounded-xl"
+                      style={{
+                        background:
+                          "linear-gradient(135deg, #6bdcc0 0%, #22d3ee 50%, #0ea5e9 100%)",
+                        boxShadow: "inset 0 1px 0 rgba(255, 255, 255, 0.2)",
+                      }}
+                    ></div>
+
+                    {/* Enhanced glow on hover */}
+                    <div
+                      className="absolute inset-0 rounded-xl opacity-0 group-hover:opacity-100 transition-all duration-500 ease-out pointer-events-none"
+                      style={{
+                        boxShadow: `
+                          0 0 20px rgba(107, 220, 192, 0.6),
+                          0 0 40px rgba(107, 220, 192, 0.3)
+                        `,
+                      }}
+                    ></div>
+
+                    {/* Subtle shimmer effect */}
+                    <div className="absolute inset-0 opacity-0 group-hover:opacity-20 transition-opacity duration-700">
+                      <div className="absolute inset-0 -skew-x-12 bg-gradient-to-r from-transparent via-white/20 to-transparent animate-pulse"></div>
+                    </div>
                   </Link>
                 </li>
               ))}
