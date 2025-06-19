@@ -597,10 +597,31 @@ ALTER TABLE bookings ENABLE ROW LEVEL SECURITY;
 ALTER TABLE follow_ups ENABLE ROW LEVEL SECURITY;
 ALTER TABLE audit_log ENABLE ROW LEVEL SECURITY;
 
--- Example policies (customize based on business rules)
+-- Complete RLS policies for profiles table (with proper cleanup)
+DROP POLICY IF EXISTS "Users can view own profile" ON profiles;
+DROP POLICY IF EXISTS "Users can update own profile" ON profiles;
+DROP POLICY IF EXISTS "Users can insert own profile" ON profiles;
+DROP POLICY IF EXISTS "Staff can view all profiles" ON profiles;
+
 CREATE POLICY "Users can view own profile" ON profiles
   FOR SELECT USING (auth.uid() = id);
 
+CREATE POLICY "Users can update own profile" ON profiles
+  FOR UPDATE USING (auth.uid() = id);
+
+CREATE POLICY "Users can insert own profile" ON profiles
+  FOR INSERT WITH CHECK (auth.uid() = id);
+
+CREATE POLICY "Staff can view all profiles" ON profiles
+  FOR SELECT USING (
+    EXISTS (
+      SELECT 1 FROM profiles
+      WHERE id = auth.uid()
+      AND is_staff = TRUE
+    )
+  );
+
+-- RLS policies for other tables
 CREATE POLICY "Staff can view all bookings" ON bookings
   FOR SELECT USING (
     EXISTS (
@@ -659,6 +680,243 @@ CREATE POLICY "Only admins can view audit logs" ON audit_log
 
 ## Database Functions & Triggers
 
+### Core Profile Management Functions
+
+```sql
+-- 1. Helper functions for getting user data from auth.users
+CREATE OR REPLACE FUNCTION get_user_email(user_id UUID)
+RETURNS TEXT AS $$
+  SELECT email FROM auth.users WHERE id = user_id;
+$$ LANGUAGE SQL SECURITY DEFINER;
+
+CREATE OR REPLACE FUNCTION get_user_phone(user_id UUID)
+RETURNS TEXT AS $$
+  SELECT phone FROM auth.users WHERE id = user_id;
+$$ LANGUAGE SQL SECURITY DEFINER;
+
+-- 2. Function to handle new user profile creation
+CREATE OR REPLACE FUNCTION handle_new_user()
+RETURNS TRIGGER AS $$
+BEGIN
+  INSERT INTO public.profiles (id, first_name, last_name, company)
+  VALUES (
+    NEW.id,
+    COALESCE(NEW.raw_user_meta_data->>'first_name', ''),
+    COALESCE(NEW.raw_user_meta_data->>'last_name', ''),
+    COALESCE(NEW.raw_user_meta_data->>'company', '')
+  );
+  RETURN NEW;
+EXCEPTION
+  WHEN others THEN
+    -- Log error but don't fail the user creation
+    RAISE WARNING 'Failed to create profile for user %: %', NEW.id, SQLERRM;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- 3. Trigger to auto-create profile on user signup
+DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
+CREATE TRIGGER on_auth_user_created
+  AFTER INSERT ON auth.users
+  FOR EACH ROW EXECUTE FUNCTION handle_new_user();
+
+-- 4. Comprehensive profile update function
+CREATE OR REPLACE FUNCTION update_user_profile(
+  user_id UUID,
+  first_name_param TEXT DEFAULT NULL,
+  last_name_param TEXT DEFAULT NULL,
+  phone_param TEXT DEFAULT NULL,
+  company_param TEXT DEFAULT NULL,
+  timezone_param TEXT DEFAULT NULL,
+  preferred_contact_method_param contact_method DEFAULT NULL,
+  marketing_consent_param BOOLEAN DEFAULT NULL
+)
+RETURNS JSON AS $$
+DECLARE
+  result JSON;
+  affected_rows INTEGER;
+BEGIN
+  -- Validate input
+  IF user_id IS NULL THEN
+    RETURN json_build_object('success', false, 'error', 'User ID is required');
+  END IF;
+
+  -- Update auth.users metadata and phone
+  UPDATE auth.users
+  SET
+    raw_user_meta_data = COALESCE(raw_user_meta_data, '{}'::jsonb) ||
+      jsonb_build_object(
+        'first_name', COALESCE(first_name_param, raw_user_meta_data->>'first_name', ''),
+        'last_name', COALESCE(last_name_param, raw_user_meta_data->>'last_name', ''),
+        'company', COALESCE(company_param, raw_user_meta_data->>'company', '')
+      ),
+    phone = COALESCE(phone_param, phone),
+    updated_at = NOW()
+  WHERE id = user_id;
+
+  GET DIAGNOSTICS affected_rows = ROW_COUNT;
+
+  IF affected_rows = 0 THEN
+    RETURN json_build_object('success', false, 'error', 'User not found in auth.users');
+  END IF;
+
+  -- Update or insert into profiles table
+  INSERT INTO profiles (
+    id,
+    first_name,
+    last_name,
+    company,
+    timezone,
+    preferred_contact_method,
+    marketing_consent,
+    updated_at
+  )
+  VALUES (
+    user_id,
+    COALESCE(first_name_param, ''),
+    COALESCE(last_name_param, ''),
+    COALESCE(company_param, ''),
+    COALESCE(timezone_param, 'UTC'),
+    COALESCE(preferred_contact_method_param, 'email'::contact_method),
+    COALESCE(marketing_consent_param, FALSE),
+    NOW()
+  )
+  ON CONFLICT (id) DO UPDATE SET
+    first_name = COALESCE(EXCLUDED.first_name, profiles.first_name),
+    last_name = COALESCE(EXCLUDED.last_name, profiles.last_name),
+    company = COALESCE(EXCLUDED.company, profiles.company),
+    timezone = COALESCE(EXCLUDED.timezone, profiles.timezone),
+    preferred_contact_method = COALESCE(EXCLUDED.preferred_contact_method, profiles.preferred_contact_method),
+    marketing_consent = COALESCE(EXCLUDED.marketing_consent, profiles.marketing_consent),
+    updated_at = NOW()
+  WHERE
+    EXCLUDED.first_name IS NOT NULL OR
+    EXCLUDED.last_name IS NOT NULL OR
+    EXCLUDED.company IS NOT NULL OR
+    EXCLUDED.timezone IS NOT NULL OR
+    EXCLUDED.preferred_contact_method IS NOT NULL OR
+    EXCLUDED.marketing_consent IS NOT NULL;
+
+  -- Return success result
+  SELECT json_build_object(
+    'success', true,
+    'user_id', user_id,
+    'updated_at', NOW()
+  ) INTO result;
+
+  RETURN result;
+EXCEPTION
+  WHEN others THEN
+    RETURN json_build_object(
+      'success', false,
+      'error', SQLERRM,
+      'error_code', SQLSTATE
+    );
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- 5. Function to get complete user profile data
+CREATE OR REPLACE FUNCTION get_user_profile(user_id UUID)
+RETURNS JSON AS $$
+DECLARE
+  result JSON;
+  auth_data RECORD;
+  profile_data RECORD;
+BEGIN
+  -- Get auth data
+  SELECT email, phone, raw_user_meta_data, created_at, updated_at
+  INTO auth_data
+  FROM auth.users
+  WHERE id = user_id;
+
+  IF NOT FOUND THEN
+    RETURN json_build_object('success', false, 'error', 'User not found');
+  END IF;
+
+  -- Get profile data
+  SELECT *
+  INTO profile_data
+  FROM profiles
+  WHERE id = user_id;
+
+  -- Build comprehensive result
+  SELECT json_build_object(
+    'success', true,
+    'user_id', user_id,
+    'auth_data', json_build_object(
+      'email', auth_data.email,
+      'phone', auth_data.phone,
+      'metadata', auth_data.raw_user_meta_data,
+      'created_at', auth_data.created_at,
+      'updated_at', auth_data.updated_at
+    ),
+    'profile_data', CASE
+      WHEN profile_data IS NOT NULL THEN
+        json_build_object(
+          'first_name', profile_data.first_name,
+          'last_name', profile_data.last_name,
+          'company', profile_data.company,
+          'role', profile_data.role,
+          'is_staff', profile_data.is_staff,
+          'timezone', profile_data.timezone,
+          'preferred_contact_method', profile_data.preferred_contact_method,
+          'marketing_consent', profile_data.marketing_consent,
+          'created_at', profile_data.created_at,
+          'updated_at', profile_data.updated_at
+        )
+      ELSE NULL
+    END
+  ) INTO result;
+
+  RETURN result;
+EXCEPTION
+  WHEN others THEN
+    RETURN json_build_object(
+      'success', false,
+      'error', SQLERRM
+    );
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+```
+
+### Understanding Supabase Auth Token Fields
+
+**Important**: The `confirmation_token`, `recovery_token` fields are managed entirely by Supabase Auth and are **not intended for direct database manipulation**. Here's what they're for:
+
+#### **Email Confirmation Process:**
+
+- **`confirmation_token`**: Generated when user signs up, used in email confirmation links
+- **`confirmation_sent_at`**: Timestamp when confirmation email was sent
+- **`email_confirmed_at`**: Timestamp when user clicked confirmation link (this gets populated)
+
+#### **Password Reset Process:**
+
+- **`recovery_token`**: Generated when user requests password reset, used in reset links
+- **`recovery_sent_at`**: Timestamp when recovery email was sent
+- **These fields are temporary** and cleared after successful password reset
+
+#### **Why They Might Appear Empty:**
+
+1. **Tokens are short-lived** (typically 1 hour) and cleared after use
+2. **Supabase manages them internally** - you shouldn't see them populated in normal operation
+3. **Modern Supabase versions** may use different token management (PKCE flow)
+
+#### **What You Should Monitor Instead:**
+
+```sql
+-- Check user email confirmation status
+SELECT
+  email,
+  email_confirmed_at IS NOT NULL as is_email_confirmed,
+  phone_confirmed_at IS NOT NULL as is_phone_confirmed,
+  confirmed_at,
+  created_at
+FROM auth.users
+WHERE email = 'user@example.com';
+```
+
+### Business Logic Functions (Existing)
+
 ```sql
 -- Function to generate booking reference with race condition protection
 CREATE OR REPLACE FUNCTION generate_booking_reference() RETURNS VARCHAR(20) AS $$
@@ -691,7 +949,7 @@ END;
 $$ LANGUAGE plpgsql;
 
 -- Sequence for booking references
-CREATE SEQUENCE booking_ref_seq START 1;
+CREATE SEQUENCE IF NOT EXISTS booking_ref_seq START 1;
 
 -- Trigger to auto-generate booking reference
 CREATE OR REPLACE FUNCTION set_booking_reference() RETURNS TRIGGER AS $$
@@ -807,6 +1065,19 @@ BEGIN
   END;
 END;
 $$ LANGUAGE plpgsql;
+
+-- Grant necessary permissions to authenticated users
+GRANT USAGE ON SCHEMA public TO authenticated;
+GRANT ALL ON profiles TO authenticated;
+GRANT EXECUTE ON FUNCTION update_user_profile TO authenticated;
+GRANT EXECUTE ON FUNCTION get_user_profile TO authenticated;
+GRANT EXECUTE ON FUNCTION get_user_email TO authenticated;
+GRANT EXECUTE ON FUNCTION get_user_phone TO authenticated;
+GRANT EXECUTE ON FUNCTION calculate_lead_score TO authenticated;
+GRANT EXECUTE ON FUNCTION generate_booking_reference TO authenticated;
+
+-- Grant permissions on sequences
+GRANT USAGE ON SEQUENCE booking_ref_seq TO authenticated;
 ```
 
 ## Business Intelligence Views

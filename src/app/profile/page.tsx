@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { PhoneInput } from "react-international-phone";
 import "react-international-phone/style.css";
 import { useAuth } from "@/contexts/AuthContext";
+import { createClientComponentClient } from "@/lib/supabase";
 import Button from "@/components/ui/Button";
 
 export default function ProfilePage() {
@@ -19,6 +20,7 @@ export default function ProfilePage() {
 
   const router = useRouter();
   const { user, loading, updateProfile } = useAuth();
+  const supabase = createClientComponentClient();
 
   useEffect(() => {
     const checkAuth = async () => {
@@ -27,20 +29,54 @@ export default function ProfilePage() {
         if (!user) {
           router.push("/auth/signin");
         } else {
-          // Load existing user data
-          setFullName(user.user_metadata?.full_name || "");
-          setPhone(user.user_metadata?.phone || "");
-          setCompany(user.user_metadata?.company || "");
-          setTimezone(
-            user.user_metadata?.timezone ||
-              Intl.DateTimeFormat().resolvedOptions().timeZone
-          );
+          // Load profile data from profiles table and auth.users
+          try {
+            // Get profile data from profiles table
+            const { data: profileData, error: profileError } = await supabase
+              .from("profiles")
+              .select("*")
+              .eq("id", user.id)
+              .single();
+
+            if (profileData && !profileError) {
+              // Use data from profiles table (most authoritative)
+              setFullName(
+                `${profileData.first_name} ${profileData.last_name}`.trim()
+              );
+              setCompany(profileData.company || "");
+              setTimezone(
+                profileData.timezone ||
+                  Intl.DateTimeFormat().resolvedOptions().timeZone
+              );
+            } else {
+              // Fallback to auth.users metadata
+              setFullName(user.user_metadata?.full_name || "");
+              setCompany(user.user_metadata?.company || "");
+              setTimezone(
+                user.user_metadata?.timezone ||
+                  Intl.DateTimeFormat().resolvedOptions().timeZone
+              );
+            }
+
+            // Phone from auth.users metadata (to avoid SMS provider requirement)
+            setPhone(user.user_metadata?.phone || "");
+          } catch (error) {
+            console.error("Error loading profile data:", error);
+            // Fallback to auth.users metadata
+            setFullName(user.user_metadata?.full_name || "");
+            setPhone(user.user_metadata?.phone || "");
+            setCompany(user.user_metadata?.company || "");
+            setTimezone(
+              user.user_metadata?.timezone ||
+                Intl.DateTimeFormat().resolvedOptions().timeZone
+            );
+          }
         }
       }
     };
 
     checkAuth();
-  }, [router, user, loading]);
+  }, [router, user, loading, supabase]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

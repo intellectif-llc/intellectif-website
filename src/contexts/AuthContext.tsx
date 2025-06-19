@@ -113,10 +113,43 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     timezone?: string;
   }) => {
     try {
-      const { error } = await supabase.auth.updateUser({
-        data: profileData,
+      // Parse full_name into first_name and last_name
+      const [firstName, ...lastNameParts] = (profileData.full_name || "").split(
+        " "
+      );
+      const lastName = lastNameParts.join(" ");
+
+      // Use our custom database function to update both auth.users and profiles
+      const { error: rpcError } = await supabase.rpc("update_user_profile", {
+        user_id: user?.id,
+        first_name_param: firstName || null,
+        last_name_param: lastName || null,
+        phone_param: profileData.phone || null,
+        company_param: profileData.company || null,
+        timezone_param: profileData.timezone || null,
       });
-      return { error };
+
+      if (rpcError) {
+        // Convert PostgrestError to compatible error format
+        return {
+          error: {
+            message: rpcError.message,
+            name: "ProfileUpdateError",
+          } as unknown as AuthError,
+        };
+      }
+
+      // Also update the auth.users metadata for compatibility (without phone to avoid SMS provider error)
+      const { error: authError } = await supabase.auth.updateUser({
+        data: {
+          first_name: firstName,
+          last_name: lastName,
+          company: profileData.company,
+          phone: profileData.phone, // Store phone in metadata instead of auth.users.phone
+        },
+      });
+
+      return { error: authError };
     } catch (error) {
       return { error: error as AuthError };
     }
