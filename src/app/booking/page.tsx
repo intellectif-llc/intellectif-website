@@ -13,6 +13,8 @@ export interface BookingData {
     price: number;
     duration: number;
     description: string;
+    features: string[];
+    popular?: boolean;
   } | null;
   dateTime: {
     date: string;
@@ -123,10 +125,7 @@ export default function BookingPage() {
         </div>
 
         {/* Step Indicator */}
-        <BookingStepIndicator
-          currentStep={currentStep}
-          totalSteps={totalSteps}
-        />
+        <BookingStepIndicator currentStep={currentStep} />
 
         {/* Main Content */}
         <div className="max-w-4xl mx-auto">{renderCurrentStep()}</div>

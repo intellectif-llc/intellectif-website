@@ -2,12 +2,10 @@ import React from "react";
 
 interface BookingStepIndicatorProps {
   currentStep: number;
-  totalSteps: number;
 }
 
 export default function BookingStepIndicator({
   currentStep,
-  totalSteps,
 }: BookingStepIndicatorProps) {
   const steps = [
     {
