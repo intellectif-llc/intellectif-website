@@ -175,3 +175,9 @@ export const NAVIGATION_ITEMS = [
   { label: "Book a Meeting", href: "/booking" },
   { label: "Contact Us", href: "/contact" },
 ];
+
+export const AUTH_NAVIGATION_ITEMS = [
+  { label: "Sign In", href: "/auth/signin" },
+  { label: "Sign Up", href: "/auth/signup" },
+  { label: "Dashboard", href: "/dashboard" },
+];

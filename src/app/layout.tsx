@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import Header from "@/components/layout/Header";
+import { AuthProvider } from "@/contexts/AuthContext";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -41,8 +42,10 @@ export default function RootLayout({
         <link rel="shortcut icon" href="/favicon.ico" type="image/x-icon" />
       </head>
       <body>
-        <Header />
-        <main className="relative">{children}</main>
+        <AuthProvider>
+          <Header />
+          <main className="relative">{children}</main>
+        </AuthProvider>
       </body>
     </html>
   );
