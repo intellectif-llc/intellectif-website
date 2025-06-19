@@ -117,6 +117,12 @@ export default function Header() {
                     >
                       Dashboard
                     </Link>
+                    <Link
+                      href="/profile"
+                      className="text-white hover:text-[#6bdcc0] transition-colors duration-300"
+                    >
+                      Profile
+                    </Link>
                     <Button
                       variant="outline"
                       size="sm"
@@ -246,6 +252,12 @@ export default function Header() {
                       className="block w-full text-center py-3 px-4 rounded-xl text-white font-medium bg-[#6bdcc0]/10 border border-[#6bdcc0]/30 hover:bg-[#6bdcc0]/20 transition-all duration-300"
                     >
                       Dashboard
+                    </Link>
+                    <Link
+                      href="/profile"
+                      className="block w-full text-center py-3 px-4 rounded-xl text-white font-medium bg-[#6bdcc0]/10 border border-[#6bdcc0]/30 hover:bg-[#6bdcc0]/20 transition-all duration-300"
+                    >
+                      Profile
                     </Link>
                     <button
                       onClick={() => signOut()}
