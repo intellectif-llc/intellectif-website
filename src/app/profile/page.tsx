@@ -9,7 +9,8 @@ import { createClientComponentClient } from "@/lib/supabase";
 import Button from "@/components/ui/Button";
 
 export default function ProfilePage() {
-  const [fullName, setFullName] = useState("");
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
   const [phone, setPhone] = useState("");
   const [company, setCompany] = useState("");
   const [timezone, setTimezone] = useState("");
@@ -40,9 +41,8 @@ export default function ProfilePage() {
 
             if (profileData && !profileError) {
               // Use data from profiles table (most authoritative)
-              setFullName(
-                `${profileData.first_name} ${profileData.last_name}`.trim()
-              );
+              setFirstName(profileData.first_name || "");
+              setLastName(profileData.last_name || "");
               setCompany(profileData.company || "");
               setTimezone(
                 profileData.timezone ||
@@ -50,7 +50,11 @@ export default function ProfilePage() {
               );
             } else {
               // Fallback to auth.users metadata
-              setFullName(user.user_metadata?.full_name || "");
+              const [firstName, ...lastNameParts] = (
+                user.user_metadata?.full_name || ""
+              ).split(" ");
+              setFirstName(firstName || "");
+              setLastName(lastNameParts.join(" ") || "");
               setCompany(user.user_metadata?.company || "");
               setTimezone(
                 user.user_metadata?.timezone ||
@@ -63,7 +67,11 @@ export default function ProfilePage() {
           } catch (error) {
             console.error("Error loading profile data:", error);
             // Fallback to auth.users metadata
-            setFullName(user.user_metadata?.full_name || "");
+            const [firstName, ...lastNameParts] = (
+              user.user_metadata?.full_name || ""
+            ).split(" ");
+            setFirstName(firstName || "");
+            setLastName(lastNameParts.join(" ") || "");
             setPhone(user.user_metadata?.phone || "");
             setCompany(user.user_metadata?.company || "");
             setTimezone(
@@ -86,8 +94,8 @@ export default function ProfilePage() {
     setSuccess("");
 
     // Validation
-    if (!fullName.trim()) {
-      setError("Full name is required");
+    if (!firstName.trim() || !lastName.trim()) {
+      setError("First name and last name are required");
       return;
     }
 
@@ -95,7 +103,7 @@ export default function ProfilePage() {
 
     try {
       const { error } = await updateProfile({
-        full_name: fullName.trim(),
+        full_name: `${firstName.trim()} ${lastName.trim()}`.trim(),
         phone: phone.trim(),
         company: company.trim(),
         timezone: timezone.trim(),
@@ -199,31 +207,58 @@ export default function ProfilePage() {
                 </p>
               </div>
 
-              {/* Full Name */}
-              <div className="mb-6">
-                <label
-                  htmlFor="fullName"
-                  className="block text-sm font-medium text-white mb-2"
-                >
-                  Full Name <span className="text-red-400">*</span>
-                </label>
-                <input
-                  id="fullName"
-                  name="fullName"
-                  type="text"
-                  required
-                  value={fullName}
-                  onChange={(e) => setFullName(e.target.value)}
-                  className="
-                    w-full px-4 py-3 rounded-xl
-                    bg-[#051028] bg-opacity-80
-                    border border-[#6bdcc0]/30
-                    text-white placeholder-gray-400
-                    focus:outline-none focus:ring-2 focus:ring-[#6bdcc0]/50 focus:border-[#6bdcc0]
-                    transition-all duration-300
-                  "
-                  placeholder="Enter your full name"
-                />
+              {/* First Name and Last Name */}
+              <div className="mb-6 grid grid-cols-2 gap-4">
+                <div>
+                  <label
+                    htmlFor="firstName"
+                    className="block text-sm font-medium text-white mb-2"
+                  >
+                    First Name <span className="text-red-400">*</span>
+                  </label>
+                  <input
+                    id="firstName"
+                    name="firstName"
+                    type="text"
+                    required
+                    value={firstName}
+                    onChange={(e) => setFirstName(e.target.value)}
+                    className="
+                      w-full px-4 py-3 rounded-xl
+                      bg-[#051028] bg-opacity-80
+                      border border-[#6bdcc0]/30
+                      text-white placeholder-gray-400
+                      focus:outline-none focus:ring-2 focus:ring-[#6bdcc0]/50 focus:border-[#6bdcc0]
+                      transition-all duration-300
+                    "
+                    placeholder="First name"
+                  />
+                </div>
+                <div>
+                  <label
+                    htmlFor="lastName"
+                    className="block text-sm font-medium text-white mb-2"
+                  >
+                    Last Name <span className="text-red-400">*</span>
+                  </label>
+                  <input
+                    id="lastName"
+                    name="lastName"
+                    type="text"
+                    required
+                    value={lastName}
+                    onChange={(e) => setLastName(e.target.value)}
+                    className="
+                      w-full px-4 py-3 rounded-xl
+                      bg-[#051028] bg-opacity-80
+                      border border-[#6bdcc0]/30
+                      text-white placeholder-gray-400
+                      focus:outline-none focus:ring-2 focus:ring-[#6bdcc0]/50 focus:border-[#6bdcc0]
+                      transition-all duration-300
+                    "
+                    placeholder="Last name"
+                  />
+                </div>
               </div>
 
               {/* Phone Number */}

@@ -9,7 +9,8 @@ export default function SignUpPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
-  const [fullName, setFullName] = useState("");
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
@@ -24,7 +25,13 @@ export default function SignUpPage() {
     setSuccess("");
 
     // Validation
-    if (!email || !password || !confirmPassword || !fullName) {
+    if (
+      !email ||
+      !password ||
+      !confirmPassword ||
+      !firstName.trim() ||
+      !lastName.trim()
+    ) {
       setError("Please fill in all fields");
       return;
     }
@@ -42,7 +49,11 @@ export default function SignUpPage() {
     setIsLoading(true);
 
     try {
-      const { error } = await signUp(email, password, fullName);
+      const { error } = await signUp(
+        email,
+        password,
+        `${firstName.trim()} ${lastName.trim()}`
+      );
 
       if (error) {
         setError(error.message);
@@ -52,7 +63,8 @@ export default function SignUpPage() {
         setEmail("");
         setPassword("");
         setConfirmPassword("");
-        setFullName("");
+        setFirstName("");
+        setLastName("");
       }
     } catch (error) {
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -79,31 +91,58 @@ export default function SignUpPage() {
         {/* Form */}
         <div className="bg-[#1e293b] bg-opacity-60 backdrop-blur-sm rounded-2xl p-8 border border-[#6bdcc0]/20 shadow-xl">
           <form className="space-y-6" onSubmit={handleSubmit}>
-            {/* Full Name */}
-            <div>
-              <label
-                htmlFor="fullName"
-                className="block text-sm font-medium text-white mb-2"
-              >
-                Full Name
-              </label>
-              <input
-                id="fullName"
-                name="fullName"
-                type="text"
-                required
-                value={fullName}
-                onChange={(e) => setFullName(e.target.value)}
-                className="
-                  w-full px-4 py-3 rounded-xl
-                  bg-[#051028] bg-opacity-80
-                  border border-[#6bdcc0]/30
-                  text-white placeholder-gray-400
-                  focus:outline-none focus:ring-2 focus:ring-[#6bdcc0]/50 focus:border-[#6bdcc0]
-                  transition-all duration-300
-                "
-                placeholder="Enter your full name"
-              />
+            {/* First Name and Last Name */}
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label
+                  htmlFor="firstName"
+                  className="block text-sm font-medium text-white mb-2"
+                >
+                  First Name
+                </label>
+                <input
+                  id="firstName"
+                  name="firstName"
+                  type="text"
+                  required
+                  value={firstName}
+                  onChange={(e) => setFirstName(e.target.value)}
+                  className="
+                    w-full px-4 py-3 rounded-xl
+                    bg-[#051028] bg-opacity-80
+                    border border-[#6bdcc0]/30
+                    text-white placeholder-gray-400
+                    focus:outline-none focus:ring-2 focus:ring-[#6bdcc0]/50 focus:border-[#6bdcc0]
+                    transition-all duration-300
+                  "
+                  placeholder="First name"
+                />
+              </div>
+              <div>
+                <label
+                  htmlFor="lastName"
+                  className="block text-sm font-medium text-white mb-2"
+                >
+                  Last Name
+                </label>
+                <input
+                  id="lastName"
+                  name="lastName"
+                  type="text"
+                  required
+                  value={lastName}
+                  onChange={(e) => setLastName(e.target.value)}
+                  className="
+                    w-full px-4 py-3 rounded-xl
+                    bg-[#051028] bg-opacity-80
+                    border border-[#6bdcc0]/30
+                    text-white placeholder-gray-400
+                    focus:outline-none focus:ring-2 focus:ring-[#6bdcc0]/50 focus:border-[#6bdcc0]
+                    transition-all duration-300
+                  "
+                  placeholder="Last name"
+                />
+              </div>
             </div>
 
             {/* Email */}

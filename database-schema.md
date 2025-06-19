@@ -694,17 +694,36 @@ RETURNS TEXT AS $$
   SELECT phone FROM auth.users WHERE id = user_id;
 $$ LANGUAGE SQL SECURITY DEFINER;
 
--- 2. Function to handle new user profile creation
+-- 2. Function to handle new user profile creation (updated to handle both full_name and separate names)
 CREATE OR REPLACE FUNCTION handle_new_user()
 RETURNS TRIGGER AS $$
+DECLARE
+  full_name_val TEXT;
+  first_name_val TEXT;
+  last_name_val TEXT;
 BEGIN
+  -- Get first_name and last_name from metadata (preferred)
+  first_name_val := COALESCE(NEW.raw_user_meta_data->>'first_name', '');
+  last_name_val := COALESCE(NEW.raw_user_meta_data->>'last_name', '');
+
+  -- If separate names are empty, try to parse full_name as fallback
+  IF first_name_val = '' AND last_name_val = '' THEN
+    full_name_val := COALESCE(NEW.raw_user_meta_data->>'full_name', '');
+    IF full_name_val != '' THEN
+      first_name_val := SPLIT_PART(full_name_val, ' ', 1);
+      last_name_val := TRIM(SUBSTRING(full_name_val FROM LENGTH(SPLIT_PART(full_name_val, ' ', 1)) + 2));
+    END IF;
+  END IF;
+
+  -- Insert profile record
   INSERT INTO public.profiles (id, first_name, last_name, company)
   VALUES (
     NEW.id,
-    COALESCE(NEW.raw_user_meta_data->>'first_name', ''),
-    COALESCE(NEW.raw_user_meta_data->>'last_name', ''),
+    first_name_val,
+    last_name_val,
     COALESCE(NEW.raw_user_meta_data->>'company', '')
   );
+
   RETURN NEW;
 EXCEPTION
   WHEN others THEN
@@ -1252,6 +1271,74 @@ All issues identified in the senior developer audit have been **successfully res
 - **Total Constraints**: 25+ (data integrity)
 
 **🎉 RESULT: This schema is now 100% production-ready for Supabase deployment with enterprise-grade reliability, performance, and maintainability.**
+
+## 🔄 **Latest Update: First Name + Last Name Support**
+
+**Date**: Updated to support separate first_name and last_name collection in forms while maintaining backward compatibility with full_name.
+
+### **SQL Command to Update Existing Installation**
+
+Run this command in your **Supabase SQL Editor** to update the trigger function:
+
+```sql
+CREATE OR REPLACE FUNCTION handle_new_user()
+RETURNS TRIGGER AS $$
+DECLARE
+  full_name_val TEXT;
+  first_name_val TEXT;
+  last_name_val TEXT;
+BEGIN
+  -- Get first_name and last_name from metadata (preferred)
+  first_name_val := COALESCE(NEW.raw_user_meta_data->>'first_name', '');
+  last_name_val := COALESCE(NEW.raw_user_meta_data->>'last_name', '');
+
+  -- If separate names are empty, try to parse full_name as fallback
+  IF first_name_val = '' AND last_name_val = '' THEN
+    full_name_val := COALESCE(NEW.raw_user_meta_data->>'full_name', '');
+    IF full_name_val != '' THEN
+      first_name_val := SPLIT_PART(full_name_val, ' ', 1);
+      last_name_val := TRIM(SUBSTRING(full_name_val FROM LENGTH(SPLIT_PART(full_name_val, ' ', 1)) + 2));
+    END IF;
+  END IF;
+
+  -- Insert profile record
+  INSERT INTO public.profiles (id, first_name, last_name, company)
+  VALUES (
+    NEW.id,
+    first_name_val,
+    last_name_val,
+    COALESCE(NEW.raw_user_meta_data->>'company', '')
+  );
+
+  RETURN NEW;
+EXCEPTION
+  WHEN others THEN
+    -- Log error but don't fail the user creation
+    RAISE WARNING 'Failed to create profile for user %: %', NEW.id, SQLERRM;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+```
+
+### **What This Update Does:**
+
+1. **✅ Prioritizes separate names**: Uses `first_name` and `last_name` from metadata when available
+2. **✅ Backward compatibility**: Falls back to parsing `full_name` if separate names are empty
+3. **✅ Automatic profile creation**: Creates `profiles` record immediately upon user signup
+4. **✅ Error handling**: Logs errors without failing user creation process
+
+### **Frontend Changes Made:**
+
+- **Signup Form**: Now collects first name and last name in separate fields (same row for space optimization)
+- **Profile Form**: Updated to use first name and last name fields
+- **AuthContext**: Stores both `full_name` and separate `first_name`/`last_name` in metadata
+
+### **Expected Behavior:**
+
+- ✅ User signs up → `auth.users` record created with both formats
+- ✅ Trigger fires → `profiles` record created automatically with proper names
+- ✅ Profile page shows separate name fields
+- ✅ All existing functionality continues to work
 
 ### _Auth schema_
 

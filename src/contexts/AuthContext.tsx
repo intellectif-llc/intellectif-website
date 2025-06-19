@@ -58,12 +58,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const signUp = async (email: string, password: string, fullName: string) => {
     try {
+      // Parse full name into first and last name
+      const [firstName, ...lastNameParts] = fullName.trim().split(" ");
+      const lastName = lastNameParts.join(" ");
+
       const { error } = await supabase.auth.signUp({
         email,
         password,
         options: {
           data: {
             full_name: fullName,
+            first_name: firstName || "",
+            last_name: lastName || "",
           },
           emailRedirectTo: `${window.location.origin}/auth/confirm?next=/dashboard`,
         },

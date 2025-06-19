@@ -17,17 +17,36 @@ RETURNS TEXT AS $$
   SELECT raw_user_meta_data->>'phone' FROM auth.users WHERE id = user_id;
 $$ LANGUAGE SQL SECURITY DEFINER;
 
--- 2. Function to handle new user profile creation
+-- 2. Function to handle new user profile creation (updated to handle both full_name and separate names)
 CREATE OR REPLACE FUNCTION handle_new_user() 
 RETURNS TRIGGER AS $$
+DECLARE
+  full_name_val TEXT;
+  first_name_val TEXT;
+  last_name_val TEXT;
 BEGIN
+  -- Get first_name and last_name from metadata (preferred)
+  first_name_val := COALESCE(NEW.raw_user_meta_data->>'first_name', '');
+  last_name_val := COALESCE(NEW.raw_user_meta_data->>'last_name', '');
+  
+  -- If separate names are empty, try to parse full_name as fallback
+  IF first_name_val = '' AND last_name_val = '' THEN
+    full_name_val := COALESCE(NEW.raw_user_meta_data->>'full_name', '');
+    IF full_name_val != '' THEN
+      first_name_val := SPLIT_PART(full_name_val, ' ', 1);
+      last_name_val := TRIM(SUBSTRING(full_name_val FROM LENGTH(SPLIT_PART(full_name_val, ' ', 1)) + 2));
+    END IF;
+  END IF;
+
+  -- Insert profile record
   INSERT INTO public.profiles (id, first_name, last_name, company)
   VALUES (
     NEW.id,
-    COALESCE(NEW.raw_user_meta_data->>'first_name', ''),
-    COALESCE(NEW.raw_user_meta_data->>'last_name', ''),
+    first_name_val,
+    last_name_val,
     COALESCE(NEW.raw_user_meta_data->>'company', '')
   );
+  
   RETURN NEW;
 EXCEPTION
   WHEN others THEN
@@ -302,7 +321,52 @@ GRANT EXECUTE ON FUNCTION calculate_lead_score TO authenticated;
 GRANT USAGE ON SEQUENCE booking_ref_seq TO authenticated;
 
 -- ==========================================
--- SECTION 5: Verification Queries
+-- SECTION 5: UPDATE COMMAND FOR EXISTING USERS
+-- ==========================================
+
+-- Run this command in Supabase SQL Editor to update the trigger function for existing installations:
+/*
+CREATE OR REPLACE FUNCTION handle_new_user() 
+RETURNS TRIGGER AS $$
+DECLARE
+  full_name_val TEXT;
+  first_name_val TEXT;
+  last_name_val TEXT;
+BEGIN
+  -- Get first_name and last_name from metadata (preferred)
+  first_name_val := COALESCE(NEW.raw_user_meta_data->>'first_name', '');
+  last_name_val := COALESCE(NEW.raw_user_meta_data->>'last_name', '');
+  
+  -- If separate names are empty, try to parse full_name as fallback
+  IF first_name_val = '' AND last_name_val = '' THEN
+    full_name_val := COALESCE(NEW.raw_user_meta_data->>'full_name', '');
+    IF full_name_val != '' THEN
+      first_name_val := SPLIT_PART(full_name_val, ' ', 1);
+      last_name_val := TRIM(SUBSTRING(full_name_val FROM LENGTH(SPLIT_PART(full_name_val, ' ', 1)) + 2));
+    END IF;
+  END IF;
+
+  -- Insert profile record
+  INSERT INTO public.profiles (id, first_name, last_name, company)
+  VALUES (
+    NEW.id,
+    first_name_val,
+    last_name_val,
+    COALESCE(NEW.raw_user_meta_data->>'company', '')
+  );
+  
+  RETURN NEW;
+EXCEPTION
+  WHEN others THEN
+    -- Log error but don't fail the user creation
+    RAISE WARNING 'Failed to create profile for user %: %', NEW.id, SQLERRM;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+*/
+
+-- ==========================================
+-- SECTION 6: Verification Queries
 -- ==========================================
 
 -- Check if all functions were created successfully
