@@ -10,6 +10,7 @@ import Button from "@/components/ui/Button";
 export default function Header() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isScrolled, setIsScrolled] = useState(false);
+  const [isStaff, setIsStaff] = useState(false);
   const { user, loading, signOut } = useAuth();
 
   useEffect(() => {
@@ -20,6 +21,33 @@ export default function Header() {
     window.addEventListener("scroll", handleScroll);
     return () => window.removeEventListener("scroll", handleScroll);
   }, []);
+
+  // Check if user is staff
+  useEffect(() => {
+    const checkStaffStatus = async () => {
+      if (!user) {
+        setIsStaff(false);
+        return;
+      }
+
+      try {
+        const response = await fetch("/api/profile");
+        if (response.ok) {
+          const data = await response.json();
+          setIsStaff(data.profile?.is_staff || false);
+        } else {
+          setIsStaff(false);
+        }
+      } catch (error) {
+        console.error("Error checking staff status:", error);
+        setIsStaff(false);
+      }
+    };
+
+    if (!loading) {
+      checkStaffStatus();
+    }
+  }, [user, loading]);
 
   const toggleMenu = () => {
     setIsMenuOpen(!isMenuOpen);
@@ -117,18 +145,15 @@ export default function Header() {
                     >
                       Dashboard
                     </Link>
-                    <Link
-                      href="/profile"
-                      className="text-white hover:text-[#6bdcc0] transition-colors duration-300"
-                    >
-                      Profile
-                    </Link>
-                    <Link
-                      href="/availability"
-                      className="text-white hover:text-[#6bdcc0] transition-colors duration-300"
-                    >
-                      Availability
-                    </Link>
+                    {/* Only show Availability for staff users */}
+                    {isStaff && (
+                      <Link
+                        href="/availability"
+                        className="text-white hover:text-[#6bdcc0] transition-colors duration-300"
+                      >
+                        Availability
+                      </Link>
+                    )}
                     <Button
                       variant="outline"
                       size="sm"
@@ -259,12 +284,15 @@ export default function Header() {
                     >
                       Dashboard
                     </Link>
-                    <Link
-                      href="/profile"
-                      className="block w-full text-center py-3 px-4 rounded-xl text-white font-medium bg-[#6bdcc0]/10 border border-[#6bdcc0]/30 hover:bg-[#6bdcc0]/20 transition-all duration-300"
-                    >
-                      Profile
-                    </Link>
+                    {/* Only show Availability for staff users in mobile menu */}
+                    {isStaff && (
+                      <Link
+                        href="/availability"
+                        className="block w-full text-center py-3 px-4 rounded-xl text-white font-medium bg-[#6bdcc0]/10 border border-[#6bdcc0]/30 hover:bg-[#6bdcc0]/20 transition-all duration-300"
+                      >
+                        Availability
+                      </Link>
+                    )}
                     <button
                       onClick={() => signOut()}
                       className="block w-full text-center py-3 px-4 rounded-xl text-white font-medium bg-red-500/10 border border-red-500/30 hover:bg-red-500/20 transition-all duration-300"
