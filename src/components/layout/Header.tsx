@@ -123,6 +123,12 @@ export default function Header() {
                     >
                       Profile
                     </Link>
+                    <Link
+                      href="/availability"
+                      className="text-white hover:text-[#6bdcc0] transition-colors duration-300"
+                    >
+                      Availability
+                    </Link>
                     <Button
                       variant="outline"
                       size="sm"

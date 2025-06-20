@@ -332,19 +332,26 @@ CREATE TYPE payment_status AS ENUM (
 );
 ```
 
-### 5. Availability Management (Optimized)
+### 5. Enhanced Availability Management System
 
 ```sql
--- Consultant availability templates (recurring availability)
+-- 1. Weekly availability templates (enhanced)
 CREATE TABLE availability_templates (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   consultant_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
   day_of_week SMALLINT NOT NULL, -- 0 = Sunday, 6 = Saturday
   start_time TIME NOT NULL,
   end_time TIME NOT NULL,
+  timezone VARCHAR(50) NOT NULL DEFAULT 'UTC', -- Consultant's timezone
   max_bookings SMALLINT NOT NULL DEFAULT 1,
   is_active BOOLEAN NOT NULL DEFAULT TRUE,
+
+  -- Template management
+  template_name VARCHAR(100), -- "Standard Week", "Busy Week", etc.
+  notes TEXT, -- Internal notes about this availability
+
   created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
 
   CONSTRAINT chk_availability_templates_day_range CHECK (day_of_week >= 0 AND day_of_week <= 6),
   CONSTRAINT chk_availability_templates_time_order CHECK (start_time < end_time),
@@ -352,26 +359,114 @@ CREATE TABLE availability_templates (
   CONSTRAINT uq_availability_templates_consultant_day_time UNIQUE (consultant_id, day_of_week, start_time, end_time)
 );
 
--- Specific date availability overrides
+-- 2. Break/time-off within daily availability
+CREATE TABLE availability_breaks (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  consultant_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  day_of_week SMALLINT NOT NULL, -- 0 = Sunday, 6 = Saturday
+  start_time TIME NOT NULL,
+  end_time TIME NOT NULL,
+  break_type break_type_enum NOT NULL DEFAULT 'break',
+  title VARCHAR(100) NOT NULL DEFAULT 'Break',
+  is_recurring BOOLEAN NOT NULL DEFAULT TRUE, -- Applies every week
+  is_active BOOLEAN NOT NULL DEFAULT TRUE,
+
+  created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+
+  CONSTRAINT chk_availability_breaks_day_range CHECK (day_of_week >= 0 AND day_of_week <= 6),
+  CONSTRAINT chk_availability_breaks_time_order CHECK (start_time < end_time),
+  CONSTRAINT uq_availability_breaks_consultant_day_time UNIQUE (consultant_id, day_of_week, start_time, end_time)
+);
+
+-- 3. Vacation/time-off periods (date ranges)
+CREATE TABLE availability_timeoff (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  consultant_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  start_date DATE NOT NULL,
+  end_date DATE NOT NULL,
+  start_time TIME, -- NULL = all day
+  end_time TIME, -- NULL = all day
+  timeoff_type timeoff_type_enum NOT NULL DEFAULT 'vacation',
+  title VARCHAR(200) NOT NULL,
+  description TEXT,
+  is_approved BOOLEAN NOT NULL DEFAULT TRUE, -- For approval workflow
+  approved_by UUID REFERENCES auth.users(id) ON DELETE SET NULL,
+  approved_at TIMESTAMP WITH TIME ZONE,
+
+  created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+
+  CONSTRAINT chk_availability_timeoff_date_order CHECK (start_date <= end_date),
+  CONSTRAINT chk_availability_timeoff_time_order CHECK (
+    start_time IS NULL OR end_time IS NULL OR start_time < end_time
+  ),
+  CONSTRAINT chk_availability_timeoff_partial_time CHECK (
+    (start_time IS NULL AND end_time IS NULL) OR
+    (start_time IS NOT NULL AND end_time IS NOT NULL)
+  )
+);
+
+-- 4. Availability overrides for specific dates
 CREATE TABLE availability_overrides (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   consultant_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
   specific_date DATE NOT NULL,
-  start_time TIME,
-  end_time TIME,
-  is_available BOOLEAN NOT NULL DEFAULT FALSE, -- Default to blocking
-  max_bookings SMALLINT,
-  reason VARCHAR(255),
+  start_time TIME, -- NULL means unavailable all day
+  end_time TIME, -- NULL means unavailable all day
+  is_available BOOLEAN NOT NULL DEFAULT FALSE,
+  max_bookings SMALLINT CHECK (max_bookings IS NULL OR max_bookings > 0),
+  reason VARCHAR(255), -- Reason for override (e.g., "Conference", "Sick day", "Extended hours")
+
   created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
 
   CONSTRAINT chk_availability_overrides_time_order CHECK (
     start_time IS NULL OR end_time IS NULL OR start_time < end_time
   ),
-  CONSTRAINT chk_availability_overrides_max_bookings_positive CHECK (
-    max_bookings IS NULL OR max_bookings > 0
+  CONSTRAINT chk_availability_overrides_time_consistency CHECK (
+    (start_time IS NULL AND end_time IS NULL) OR
+    (start_time IS NOT NULL AND end_time IS NOT NULL)
   ),
   CONSTRAINT uq_availability_overrides_consultant_date_time UNIQUE (consultant_id, specific_date, start_time, end_time)
 );
+
+-- 5. Template sets for easy copying
+CREATE TABLE availability_template_sets (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  consultant_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  set_name VARCHAR(100) NOT NULL,
+  description TEXT,
+  is_default BOOLEAN NOT NULL DEFAULT FALSE,
+
+  created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+
+  CONSTRAINT uq_availability_template_sets_consultant_name UNIQUE (consultant_id, set_name)
+);
+
+-- 6. Link templates to template sets
+CREATE TABLE availability_template_set_items (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  template_set_id UUID NOT NULL REFERENCES availability_template_sets(id) ON DELETE CASCADE,
+  day_of_week SMALLINT NOT NULL,
+  start_time TIME NOT NULL,
+  end_time TIME NOT NULL,
+  max_bookings SMALLINT NOT NULL DEFAULT 1,
+
+  CONSTRAINT chk_template_set_items_day_range CHECK (day_of_week >= 0 AND day_of_week <= 6),
+  CONSTRAINT chk_template_set_items_time_order CHECK (start_time < end_time)
+);
+
+-- Supporting enums
+CREATE TYPE break_type_enum AS ENUM ('break', 'lunch', 'meeting', 'buffer', 'personal');
+CREATE TYPE timeoff_type_enum AS ENUM ('vacation', 'sick', 'personal', 'conference', 'training', 'holiday');
+
+-- Indexes for performance
+CREATE INDEX idx_availability_templates_consultant_day ON availability_templates(consultant_id, day_of_week) WHERE is_active = TRUE;
+CREATE INDEX idx_availability_breaks_consultant_day ON availability_breaks(consultant_id, day_of_week) WHERE is_active = TRUE;
+CREATE INDEX idx_availability_timeoff_consultant_dates ON availability_timeoff(consultant_id, start_date, end_date);
+CREATE INDEX idx_availability_timeoff_date_range ON availability_timeoff(start_date, end_date);
+CREATE INDEX idx_availability_overrides_consultant_date ON availability_overrides(consultant_id, specific_date);
 ```
 
 ### 6. Follow-up System (Optimized)

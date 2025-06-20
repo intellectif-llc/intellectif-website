@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import { Toaster } from "react-hot-toast";
 import Header from "@/components/layout/Header";
 import { AuthProvider } from "@/contexts/AuthContext";
 import "./globals.css";
@@ -45,6 +46,36 @@ export default function RootLayout({
         <AuthProvider>
           <Header />
           <main className="relative">{children}</main>
+          <Toaster
+            position="top-right"
+            toastOptions={{
+              duration: 4000,
+              style: {
+                background: "#1e293b",
+                color: "#fff",
+                border: "1px solid #6bdcc0",
+                borderRadius: "12px",
+              },
+              success: {
+                iconTheme: {
+                  primary: "#6bdcc0",
+                  secondary: "#fff",
+                },
+              },
+              error: {
+                iconTheme: {
+                  primary: "#ef4444",
+                  secondary: "#fff",
+                },
+              },
+              loading: {
+                iconTheme: {
+                  primary: "#6bdcc0",
+                  secondary: "#fff",
+                },
+              },
+            }}
+          />
         </AuthProvider>
       </body>
     </html>
