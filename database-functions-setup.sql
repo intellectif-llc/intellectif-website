@@ -1,6 +1,6 @@
 -- Intellectif Booking System - Functions & Triggers Setup
--- Run this AFTER creating tables and enums
--- This adds all profile management functions and business logic
+-- UPDATED TO MIRROR ACTUAL DATABASE STATE
+-- This file contains the exact functions that exist in the database
 
 -- ==========================================
 -- SECTION 1: Profile Management Functions
@@ -14,10 +14,10 @@ $$ LANGUAGE SQL SECURITY DEFINER;
 
 CREATE OR REPLACE FUNCTION get_user_phone(user_id UUID)
 RETURNS TEXT AS $$
-  SELECT raw_user_meta_data->>'phone' FROM auth.users WHERE id = user_id;
+  SELECT phone FROM auth.users WHERE id = user_id;
 $$ LANGUAGE SQL SECURITY DEFINER;
 
--- 2. Function to handle new user profile creation (updated to handle both full_name and separate names)
+-- 2. Function to handle new user profile creation
 CREATE OR REPLACE FUNCTION handle_new_user() 
 RETURNS TRIGGER AS $$
 DECLARE
@@ -62,7 +62,7 @@ CREATE TRIGGER on_auth_user_created
   AFTER INSERT ON auth.users
   FOR EACH ROW EXECUTE FUNCTION handle_new_user();
 
--- 4. Comprehensive profile update function
+-- 4. Profile update function
 CREATE OR REPLACE FUNCTION update_user_profile(
   user_id UUID,
   first_name_param TEXT DEFAULT NULL,
@@ -83,16 +83,16 @@ BEGIN
     RETURN json_build_object('success', false, 'error', 'User ID is required');
   END IF;
 
-  -- Update auth.users metadata (store phone in metadata to avoid SMS provider requirement)
+  -- Update auth.users metadata and phone
   UPDATE auth.users 
   SET 
     raw_user_meta_data = COALESCE(raw_user_meta_data, '{}'::jsonb) || 
       jsonb_build_object(
         'first_name', COALESCE(first_name_param, raw_user_meta_data->>'first_name', ''),
         'last_name', COALESCE(last_name_param, raw_user_meta_data->>'last_name', ''),
-        'company', COALESCE(company_param, raw_user_meta_data->>'company', ''),
-        'phone', COALESCE(phone_param, raw_user_meta_data->>'phone', '')
+        'company', COALESCE(company_param, raw_user_meta_data->>'company', '')
       ),
+    phone = COALESCE(phone_param, phone),
     updated_at = NOW()
   WHERE id = user_id;
 
@@ -166,7 +166,7 @@ DECLARE
   profile_data RECORD;
 BEGIN
   -- Get auth data
-  SELECT email, raw_user_meta_data, created_at, updated_at
+  SELECT email, phone, raw_user_meta_data, created_at, updated_at
   INTO auth_data
   FROM auth.users 
   WHERE id = user_id;
@@ -187,7 +187,7 @@ BEGIN
     'user_id', user_id,
     'auth_data', json_build_object(
       'email', auth_data.email,
-      'phone', auth_data.raw_user_meta_data->>'phone',
+      'phone', auth_data.phone,
       'metadata', auth_data.raw_user_meta_data,
       'created_at', auth_data.created_at,
       'updated_at', auth_data.updated_at
@@ -220,40 +220,23 @@ EXCEPTION
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- ==========================================
--- SECTION 2: Complete RLS Policies for Profiles
--- ==========================================
-
--- Drop existing policies if they exist
-DROP POLICY IF EXISTS "Users can view own profile" ON profiles;
-DROP POLICY IF EXISTS "Users can update own profile" ON profiles;
-DROP POLICY IF EXISTS "Users can insert own profile" ON profiles;
-DROP POLICY IF EXISTS "Staff can view all profiles" ON profiles;
-
--- Create comprehensive RLS policies for profiles
-CREATE POLICY "Users can view own profile" ON profiles
-  FOR SELECT USING (auth.uid() = id);
-
-CREATE POLICY "Users can update own profile" ON profiles
-  FOR UPDATE USING (auth.uid() = id);
-
-CREATE POLICY "Users can insert own profile" ON profiles
-  FOR INSERT WITH CHECK (auth.uid() = id);
-
-CREATE POLICY "Staff can view all profiles" ON profiles
-  FOR SELECT USING (
-    EXISTS (
-      SELECT 1 FROM profiles
-      WHERE id = auth.uid()
-      AND is_staff = TRUE
-    )
+-- 6. Function to check if user is staff (missing from original setup)
+-- NOTE: This function exists in your database but was missing from the setup file
+CREATE OR REPLACE FUNCTION is_staff_user(user_id UUID)
+RETURNS BOOLEAN AS $$
+BEGIN
+  RETURN EXISTS (
+    SELECT 1 FROM profiles 
+    WHERE id = user_id AND is_staff = TRUE
   );
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
 
 -- ==========================================
--- SECTION 3: Business Logic Functions (Future Use)
+-- SECTION 2: Business Logic Functions
 -- ==========================================
 
--- Booking reference generation (for when you implement bookings)
+-- Booking reference generation
 CREATE SEQUENCE IF NOT EXISTS booking_ref_seq START 1;
 
 CREATE OR REPLACE FUNCTION generate_booking_reference() RETURNS VARCHAR(20) AS $$
@@ -288,9 +271,9 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- Lead scoring function (for future use)
+-- Lead scoring function
 CREATE OR REPLACE FUNCTION calculate_lead_score(
-  service_price DECIMAL,
+  service_price NUMERIC,
   company_size TEXT,
   project_description TEXT
 ) RETURNS SMALLINT AS $$
@@ -305,114 +288,10 @@ END;
 $$ LANGUAGE plpgsql;
 
 -- ==========================================
--- SECTION 4: Grant Permissions
+-- SECTION 3: AVAILABILITY MANAGEMENT FUNCTIONS
 -- ==========================================
 
--- Grant necessary permissions to authenticated users
-GRANT USAGE ON SCHEMA public TO authenticated;
-GRANT ALL ON profiles TO authenticated;
-GRANT EXECUTE ON FUNCTION update_user_profile TO authenticated;
-GRANT EXECUTE ON FUNCTION get_user_profile TO authenticated;
-GRANT EXECUTE ON FUNCTION get_user_email TO authenticated;
-GRANT EXECUTE ON FUNCTION get_user_phone TO authenticated;
-GRANT EXECUTE ON FUNCTION calculate_lead_score TO authenticated;
-
--- Grant permissions on sequences
-GRANT USAGE ON SEQUENCE booking_ref_seq TO authenticated;
-
--- ==========================================
--- SECTION 5: UPDATE COMMAND FOR EXISTING USERS
--- ==========================================
-
--- Run this command in Supabase SQL Editor to update the trigger function for existing installations:
-/*
-CREATE OR REPLACE FUNCTION handle_new_user() 
-RETURNS TRIGGER AS $$
-DECLARE
-  full_name_val TEXT;
-  first_name_val TEXT;
-  last_name_val TEXT;
-BEGIN
-  -- Get first_name and last_name from metadata (preferred)
-  first_name_val := COALESCE(NEW.raw_user_meta_data->>'first_name', '');
-  last_name_val := COALESCE(NEW.raw_user_meta_data->>'last_name', '');
-  
-  -- If separate names are empty, try to parse full_name as fallback
-  IF first_name_val = '' AND last_name_val = '' THEN
-    full_name_val := COALESCE(NEW.raw_user_meta_data->>'full_name', '');
-    IF full_name_val != '' THEN
-      first_name_val := SPLIT_PART(full_name_val, ' ', 1);
-      last_name_val := TRIM(SUBSTRING(full_name_val FROM LENGTH(SPLIT_PART(full_name_val, ' ', 1)) + 2));
-    END IF;
-  END IF;
-
-  -- Insert profile record
-  INSERT INTO public.profiles (id, first_name, last_name, company)
-  VALUES (
-    NEW.id,
-    first_name_val,
-    last_name_val,
-    COALESCE(NEW.raw_user_meta_data->>'company', '')
-  );
-  
-  RETURN NEW;
-EXCEPTION
-  WHEN others THEN
-    -- Log error but don't fail the user creation
-    RAISE WARNING 'Failed to create profile for user %: %', NEW.id, SQLERRM;
-    RETURN NEW;
-END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
-*/
-
--- ==========================================
--- SECTION 6: Verification Queries
--- ==========================================
-
--- Check if all functions were created successfully
-SELECT 
-  routine_name,
-  routine_type,
-  specific_name
-FROM information_schema.routines 
-WHERE routine_schema = 'public' 
-AND routine_name IN (
-  'update_user_profile',
-  'get_user_profile', 
-  'get_user_email',
-  'get_user_phone',
-  'handle_new_user',
-  'calculate_lead_score',
-  'generate_booking_reference'
-)
-ORDER BY routine_name;
-
--- Check if triggers were created
-SELECT 
-  trigger_name,
-  event_manipulation,
-  event_object_table
-FROM information_schema.triggers 
-WHERE trigger_schema = 'public'
-AND trigger_name = 'on_auth_user_created';
-
--- Check RLS policies on profiles
-SELECT 
-  schemaname,
-  tablename,
-  policyname,
-  permissive,
-  roles,
-  cmd
-FROM pg_policies 
-WHERE tablename = 'profiles'
-ORDER BY policyname;
-
--- ==========================================
--- SECTION 7: Enhanced Availability Management Functions
--- ==========================================
-
--- 1. Function to calculate actual availability for a specific day
+-- 1. Function to calculate actual availability for a specific day (UPDATED)
 CREATE OR REPLACE FUNCTION calculate_daily_availability(
   consultant_id_param UUID,
   target_date DATE
@@ -422,475 +301,94 @@ CREATE OR REPLACE FUNCTION calculate_daily_availability(
   max_bookings SMALLINT
 ) AS $$
 DECLARE
-  day_of_week_val SMALLINT;
-  template_record RECORD;
-  break_record RECORD;
-  timeoff_record RECORD;
-  current_start TIME;
-  current_end TIME;
+    day_of_week_val SMALLINT;
+    template_record RECORD;
+    unavailable_record RECORD;
+    timeoff_exists BOOLEAN;
+    current_pos TIME;
 BEGIN
-  -- Get day of week (0 = Sunday, 6 = Saturday)
-  day_of_week_val := EXTRACT(DOW FROM target_date);
-  
-  -- Check for vacation/time-off that blocks the entire day
-  SELECT * INTO timeoff_record
-  FROM availability_timeoff
-  WHERE consultant_id = consultant_id_param
-    AND target_date BETWEEN start_date AND end_date
-    AND start_time IS NULL -- All-day time off
-    AND is_approved = TRUE;
-    
-  IF FOUND THEN
-    -- No availability on this day
-    RETURN;
-  END IF;
-  
-  -- Get base availability template for this day
-  FOR template_record IN
-    SELECT start_time, end_time, max_bookings
-    FROM availability_templates
-    WHERE consultant_id = consultant_id_param
-      AND day_of_week = day_of_week_val
-      AND is_active = TRUE
-    ORDER BY start_time
-  LOOP
-    current_start := template_record.start_time;
-    current_end := template_record.end_time;
-    
-    -- Check for partial-day time-off that affects this slot
-    SELECT * INTO timeoff_record
-    FROM availability_timeoff
+    -- Get day of week (0 = Sunday, 6 = Saturday)
+    day_of_week_val := EXTRACT(DOW FROM target_date);
+
+    -- Check for approved, full-day time-off first. If one exists, the consultant is unavailable.
+    SELECT TRUE INTO timeoff_exists
+    FROM public.availability_timeoff
     WHERE consultant_id = consultant_id_param
       AND target_date BETWEEN start_date AND end_date
-      AND start_time IS NOT NULL -- Partial day time off
+      AND start_time IS NULL AND end_time IS NULL -- This signifies a full-day time-off
       AND is_approved = TRUE
-      AND (
-        (start_time <= current_start AND end_time > current_start) OR
-        (start_time < current_end AND end_time >= current_end) OR
-        (start_time >= current_start AND end_time <= current_end)
-      );
-      
-    IF FOUND THEN
-      -- Skip this slot if blocked by time-off
-      CONTINUE;
+    LIMIT 1;
+
+    IF timeoff_exists THEN
+        RETURN; -- Exit early, no availability on this day.
     END IF;
-    
-    -- Apply breaks to split the availability
-    FOR break_record IN
-      SELECT start_time, end_time
-      FROM availability_breaks
-      WHERE consultant_id = consultant_id_param
-        AND day_of_week = day_of_week_val
-        AND is_active = TRUE
-        AND start_time < current_end
-        AND end_time > current_start
-      ORDER BY start_time
+
+    -- Loop through each availability template for the given day
+    FOR template_record IN
+        SELECT at.start_time, at.end_time, at.max_bookings
+        FROM public.availability_templates at
+        WHERE at.consultant_id = consultant_id_param
+          AND at.day_of_week = day_of_week_val
+          AND at.is_active = TRUE
+        ORDER BY at.start_time
     LOOP
-      -- Return availability before the break
-      IF current_start < break_record.start_time THEN
-        available_start := current_start;
-        available_end := break_record.start_time;
-        max_bookings := template_record.max_bookings;
-        RETURN NEXT;
-      END IF;
-      
-      -- Update current start to after the break
-      IF break_record.end_time > current_start THEN
-        current_start := break_record.end_time;
-      END IF;
+        -- The start of our availability slot for processing.
+        current_pos := template_record.start_time;
+
+        -- This loop iterates through all unavailable periods (breaks and partial time-offs)
+        -- that fall within the current template's time range.
+        FOR unavailable_record IN
+            WITH all_unavailable AS (
+                -- Get all active breaks for the day of the week
+                SELECT ab.start_time, ab.end_time
+                FROM public.availability_breaks ab
+                WHERE ab.consultant_id = consultant_id_param
+                  AND ab.day_of_week = day_of_week_val
+                  AND ab.is_active = TRUE
+
+                UNION ALL
+
+                -- Get all approved partial-day time-offs for the specific date
+                SELECT ato.start_time, ato.end_time
+                FROM public.availability_timeoff ato
+                WHERE ato.consultant_id = consultant_id_param
+                  AND target_date BETWEEN ato.start_date AND ato.end_date
+                  AND ato.start_time IS NOT NULL AND ato.end_time IS NOT NULL
+                  AND ato.is_approved = TRUE
+            )
+            SELECT u.start_time, u.end_time
+            FROM all_unavailable u
+            -- Filter for unavailable blocks that overlap with the current template slot
+            WHERE u.end_time > template_record.start_time AND u.start_time < template_record.end_time
+            ORDER BY u.start_time, u.end_time
+        LOOP
+            -- If there is a gap between our current position and the start of this unavailable block,
+            -- then that gap is an available slot.
+            IF current_pos < unavailable_record.start_time THEN
+                available_start := current_pos;
+                available_end := unavailable_record.start_time;
+                max_bookings := template_record.max_bookings;
+                RETURN NEXT;
+            END IF;
+
+            -- Move our current position to the end of the unavailable block.
+            -- Using GREATEST handles cases where unavailable periods might overlap.
+            current_pos := GREATEST(current_pos, unavailable_record.end_time);
+        END LOOP;
+
+        -- After checking all unavailable periods, if our current position is still before
+        -- the end of the template, the remaining time is also an available slot.
+        IF current_pos < template_record.end_time THEN
+            available_start := current_pos;
+            available_end := template_record.end_time;
+            max_bookings := template_record.max_bookings;
+            RETURN NEXT;
+        END IF;
     END LOOP;
-    
-    -- Return remaining availability after all breaks
-    IF current_start < current_end THEN
-      available_start := current_start;
-      available_end := current_end;
-      max_bookings := template_record.max_bookings;
-      RETURN NEXT;
-    END IF;
-  END LOOP;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- 2. Function to copy availability template to another day
-CREATE OR REPLACE FUNCTION copy_availability_template(
-  consultant_id_param UUID,
-  source_day SMALLINT,
-  target_day SMALLINT
-) RETURNS JSON AS $$
-DECLARE
-  template_record RECORD;
-  break_record RECORD;
-  copied_templates INTEGER := 0;
-  copied_breaks INTEGER := 0;
-BEGIN
-  -- Validate day range
-  IF source_day < 0 OR source_day > 6 OR target_day < 0 OR target_day > 6 THEN
-    RETURN json_build_object('success', false, 'error', 'Invalid day of week');
-  END IF;
-  
-  -- Delete existing templates for target day
-  DELETE FROM availability_templates
-  WHERE consultant_id = consultant_id_param AND day_of_week = target_day;
-  
-  DELETE FROM availability_breaks
-  WHERE consultant_id = consultant_id_param AND day_of_week = target_day;
-  
-  -- Copy availability templates
-  FOR template_record IN
-    SELECT start_time, end_time, timezone, max_bookings, template_name, notes
-    FROM availability_templates
-    WHERE consultant_id = consultant_id_param
-      AND day_of_week = source_day
-      AND is_active = TRUE
-  LOOP
-    INSERT INTO availability_templates (
-      consultant_id, day_of_week, start_time, end_time, timezone,
-      max_bookings, template_name, notes, is_active
-    ) VALUES (
-      consultant_id_param, target_day, template_record.start_time,
-      template_record.end_time, template_record.timezone,
-      template_record.max_bookings, template_record.template_name,
-      template_record.notes, TRUE
-    );
-    copied_templates := copied_templates + 1;
-  END LOOP;
-  
-  -- Copy breaks
-  FOR break_record IN
-    SELECT start_time, end_time, break_type, title
-    FROM availability_breaks
-    WHERE consultant_id = consultant_id_param
-      AND day_of_week = source_day
-      AND is_active = TRUE
-  LOOP
-    INSERT INTO availability_breaks (
-      consultant_id, day_of_week, start_time, end_time,
-      break_type, title, is_recurring, is_active
-    ) VALUES (
-      consultant_id_param, target_day, break_record.start_time,
-      break_record.end_time, break_record.break_type,
-      break_record.title, TRUE, TRUE
-    );
-    copied_breaks := copied_breaks + 1;
-  END LOOP;
-  
-  RETURN json_build_object(
-    'success', true,
-    'copied_templates', copied_templates,
-    'copied_breaks', copied_breaks
-  );
-EXCEPTION
-  WHEN others THEN
-    RETURN json_build_object('success', false, 'error', SQLERRM);
-END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
-
--- 3. Function to save and apply template set
-CREATE OR REPLACE FUNCTION save_template_set(
-  consultant_id_param UUID,
-  set_name_param VARCHAR(100),
-  description_param TEXT DEFAULT NULL
-) RETURNS JSON AS $$
-DECLARE
-  template_set_id UUID;
-  template_record RECORD;
-BEGIN
-  -- Create or update template set
-  INSERT INTO availability_template_sets (consultant_id, set_name, description)
-  VALUES (consultant_id_param, set_name_param, description_param)
-  ON CONFLICT (consultant_id, set_name) DO UPDATE SET
-    description = EXCLUDED.description,
-    updated_at = NOW()
-  RETURNING id INTO template_set_id;
-  
-  -- Clear existing items
-  DELETE FROM availability_template_set_items WHERE template_set_id = template_set_id;
-  
-  -- Save current templates to set
-  FOR template_record IN
-    SELECT day_of_week, start_time, end_time, max_bookings
-    FROM availability_templates
-    WHERE consultant_id = consultant_id_param AND is_active = TRUE
-  LOOP
-    INSERT INTO availability_template_set_items (
-      template_set_id, day_of_week, start_time, end_time, max_bookings
-    ) VALUES (
-      template_set_id, template_record.day_of_week,
-      template_record.start_time, template_record.end_time,
-      template_record.max_bookings
-    );
-  END LOOP;
-  
-  RETURN json_build_object('success', true, 'template_set_id', template_set_id);
-EXCEPTION
-  WHEN others THEN
-    RETURN json_build_object('success', false, 'error', SQLERRM);
-END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
-
--- 4. Function to apply template set
-CREATE OR REPLACE FUNCTION apply_template_set(
-  consultant_id_param UUID,
-  template_set_id_param UUID
-) RETURNS JSON AS $$
-DECLARE
-  item_record RECORD;
-  applied_count INTEGER := 0;
-BEGIN
-  -- Verify ownership
-  IF NOT EXISTS (
-    SELECT 1 FROM availability_template_sets
-    WHERE id = template_set_id_param AND consultant_id = consultant_id_param
-  ) THEN
-    RETURN json_build_object('success', false, 'error', 'Template set not found');
-  END IF;
-  
-  -- Clear existing templates
-  DELETE FROM availability_templates WHERE consultant_id = consultant_id_param;
-  
-  -- Apply template set
-  FOR item_record IN
-    SELECT day_of_week, start_time, end_time, max_bookings
-    FROM availability_template_set_items
-    WHERE template_set_id = template_set_id_param
-  LOOP
-    INSERT INTO availability_templates (
-      consultant_id, day_of_week, start_time, end_time, max_bookings, is_active
-    ) VALUES (
-      consultant_id_param, item_record.day_of_week,
-      item_record.start_time, item_record.end_time,
-      item_record.max_bookings, TRUE
-    );
-    applied_count := applied_count + 1;
-  END LOOP;
-  
-  RETURN json_build_object('success', true, 'applied_templates', applied_count);
-EXCEPTION
-  WHEN others THEN
-    RETURN json_build_object('success', false, 'error', SQLERRM);
-END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
-
--- 5. Function to get availability summary for a date range
-CREATE OR REPLACE FUNCTION get_availability_summary(
-  consultant_id_param UUID,
-  start_date_param DATE,
-  end_date_param DATE
-) RETURNS TABLE (
-  date_val DATE,
-  day_name TEXT,
-  total_hours DECIMAL(4,2),
-  available_slots INTEGER,
-  has_timeoff BOOLEAN
-) AS $$
-DECLARE
-  current_date DATE;
-  availability_record RECORD;
-  slot_count INTEGER;
-  total_minutes INTEGER;
-BEGIN
-  current_date := start_date_param;
-  
-  WHILE current_date <= end_date_param LOOP
-    slot_count := 0;
-    total_minutes := 0;
-    
-    -- Calculate availability for this date
-    FOR availability_record IN
-      SELECT available_start, available_end, max_bookings
-      FROM calculate_daily_availability(consultant_id_param, current_date)
-    LOOP
-      total_minutes := total_minutes + EXTRACT(EPOCH FROM (availability_record.available_end - availability_record.available_start)) / 60;
-      slot_count := slot_count + availability_record.max_bookings;
-    END LOOP;
-    
-    date_val := current_date;
-    day_name := TO_CHAR(current_date, 'Day');
-    total_hours := total_minutes / 60.0;
-    available_slots := slot_count;
-    has_timeoff := EXISTS (
-      SELECT 1 FROM availability_timeoff
-      WHERE consultant_id = consultant_id_param
-        AND current_date BETWEEN start_date AND end_date
-        AND is_approved = TRUE
-    );
-    
-    RETURN NEXT;
-    current_date := current_date + INTERVAL '1 day';
-  END LOOP;
-END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
-
--- Grant permissions for availability functions
-GRANT EXECUTE ON FUNCTION calculate_daily_availability TO authenticated;
-GRANT EXECUTE ON FUNCTION copy_availability_template TO authenticated;
-GRANT EXECUTE ON FUNCTION save_template_set TO authenticated;
-GRANT EXECUTE ON FUNCTION apply_template_set TO authenticated;
-GRANT EXECUTE ON FUNCTION get_availability_summary TO authenticated;
-
--- ==========================================
--- SECTION 8: ENHANCED AVAILABILITY SYSTEM SETUP
--- ==========================================
-
--- Run these commands in Supabase SQL Editor to set up the enhanced availability system:
-
-/*
--- 1. Create new enums for breaks and time-off
-CREATE TYPE break_type_enum AS ENUM ('break', 'lunch', 'meeting', 'buffer', 'personal');
-CREATE TYPE timeoff_type_enum AS ENUM ('vacation', 'sick', 'personal', 'conference', 'training', 'holiday');
-
--- 2. Enhanced availability templates table
-DROP TABLE IF EXISTS availability_templates CASCADE;
-CREATE TABLE availability_templates (
-  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-  consultant_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
-  day_of_week SMALLINT NOT NULL, -- 0 = Sunday, 6 = Saturday
-  start_time TIME NOT NULL,
-  end_time TIME NOT NULL,
-  timezone VARCHAR(50) NOT NULL DEFAULT 'UTC', -- Consultant's timezone
-  max_bookings SMALLINT NOT NULL DEFAULT 1,
-  is_active BOOLEAN NOT NULL DEFAULT TRUE,
-  
-  -- Template management
-  template_name VARCHAR(100), -- "Standard Week", "Busy Week", etc.
-  notes TEXT, -- Internal notes about this availability
-  
-  created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
-  updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
-
-  CONSTRAINT chk_availability_templates_day_range CHECK (day_of_week >= 0 AND day_of_week <= 6),
-  CONSTRAINT chk_availability_templates_time_order CHECK (start_time < end_time),
-  CONSTRAINT chk_availability_templates_max_bookings_positive CHECK (max_bookings > 0),
-  CONSTRAINT uq_availability_templates_consultant_day_time UNIQUE (consultant_id, day_of_week, start_time, end_time)
-);
-
--- 3. Break/time-off within daily availability
-CREATE TABLE availability_breaks (
-  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-  consultant_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
-  day_of_week SMALLINT NOT NULL, -- 0 = Sunday, 6 = Saturday
-  start_time TIME NOT NULL,
-  end_time TIME NOT NULL,
-  break_type break_type_enum NOT NULL DEFAULT 'break',
-  title VARCHAR(100) NOT NULL DEFAULT 'Break',
-  is_recurring BOOLEAN NOT NULL DEFAULT TRUE, -- Applies every week
-  is_active BOOLEAN NOT NULL DEFAULT TRUE,
-  
-  created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
-  updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
-
-  CONSTRAINT chk_availability_breaks_day_range CHECK (day_of_week >= 0 AND day_of_week <= 6),
-  CONSTRAINT chk_availability_breaks_time_order CHECK (start_time < end_time),
-  CONSTRAINT uq_availability_breaks_consultant_day_time UNIQUE (consultant_id, day_of_week, start_time, end_time)
-);
-
--- 4. Vacation/time-off periods (date ranges)
-CREATE TABLE availability_timeoff (
-  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-  consultant_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
-  start_date DATE NOT NULL,
-  end_date DATE NOT NULL,
-  start_time TIME, -- NULL = all day
-  end_time TIME, -- NULL = all day
-  timeoff_type timeoff_type_enum NOT NULL DEFAULT 'vacation',
-  title VARCHAR(200) NOT NULL,
-  description TEXT,
-  is_approved BOOLEAN NOT NULL DEFAULT TRUE, -- For approval workflow
-  approved_by UUID REFERENCES auth.users(id) ON DELETE SET NULL,
-  approved_at TIMESTAMP WITH TIME ZONE,
-  
-  created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
-  updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
-
-  CONSTRAINT chk_availability_timeoff_date_order CHECK (start_date <= end_date),
-  CONSTRAINT chk_availability_timeoff_time_order CHECK (
-    start_time IS NULL OR end_time IS NULL OR start_time < end_time
-  ),
-  CONSTRAINT chk_availability_timeoff_partial_time CHECK (
-    (start_time IS NULL AND end_time IS NULL) OR 
-    (start_time IS NOT NULL AND end_time IS NOT NULL)
-  )
-);
-
--- 5. Template sets for easy copying
-CREATE TABLE availability_template_sets (
-  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-  consultant_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
-  set_name VARCHAR(100) NOT NULL,
-  description TEXT,
-  is_default BOOLEAN NOT NULL DEFAULT FALSE,
-  
-  created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
-  updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
-  
-  CONSTRAINT uq_availability_template_sets_consultant_name UNIQUE (consultant_id, set_name)
-);
-
--- 6. Link templates to template sets
-CREATE TABLE availability_template_set_items (
-  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-  template_set_id UUID NOT NULL REFERENCES availability_template_sets(id) ON DELETE CASCADE,
-  day_of_week SMALLINT NOT NULL,
-  start_time TIME NOT NULL,
-  end_time TIME NOT NULL,
-  max_bookings SMALLINT NOT NULL DEFAULT 1,
-  
-  CONSTRAINT chk_template_set_items_day_range CHECK (day_of_week >= 0 AND day_of_week <= 6),
-  CONSTRAINT chk_template_set_items_time_order CHECK (start_time < end_time)
-);
-
--- 7. Performance indexes
-CREATE INDEX idx_availability_templates_consultant_day ON availability_templates(consultant_id, day_of_week) WHERE is_active = TRUE;
-CREATE INDEX idx_availability_breaks_consultant_day ON availability_breaks(consultant_id, day_of_week) WHERE is_active = TRUE;
-CREATE INDEX idx_availability_timeoff_consultant_dates ON availability_timeoff(consultant_id, start_date, end_date);
-CREATE INDEX idx_availability_timeoff_date_range ON availability_timeoff(start_date, end_date);
-
--- 8. Row Level Security
-ALTER TABLE availability_templates ENABLE ROW LEVEL SECURITY;
-ALTER TABLE availability_breaks ENABLE ROW LEVEL SECURITY;
-ALTER TABLE availability_timeoff ENABLE ROW LEVEL SECURITY;
-ALTER TABLE availability_overrides ENABLE ROW LEVEL SECURITY;
-ALTER TABLE availability_template_sets ENABLE ROW LEVEL SECURITY;
-ALTER TABLE availability_template_set_items ENABLE ROW LEVEL SECURITY;
-
--- RLS Policies for availability tables
-CREATE POLICY "Staff can manage own availability templates" ON availability_templates
-  FOR ALL USING (consultant_id = auth.uid());
-
-CREATE POLICY "Staff can manage own availability breaks" ON availability_breaks
-  FOR ALL USING (consultant_id = auth.uid());
-
-CREATE POLICY "Staff can manage own availability timeoff" ON availability_timeoff
-  FOR ALL USING (consultant_id = auth.uid());
-
-CREATE POLICY "Staff can manage own availability overrides" ON availability_overrides
-  FOR ALL USING (consultant_id = auth.uid());
-
-CREATE POLICY "Staff can manage own template sets" ON availability_template_sets
-  FOR ALL USING (consultant_id = auth.uid());
-
-CREATE POLICY "Staff can manage own template set items" ON availability_template_set_items
-  FOR ALL USING (
-    EXISTS (
-      SELECT 1 FROM availability_template_sets
-      WHERE id = template_set_id AND consultant_id = auth.uid()
-    )
-  );
-
--- Grant table permissions
-GRANT ALL ON availability_templates TO authenticated;
-GRANT ALL ON availability_breaks TO authenticated;
-GRANT ALL ON availability_timeoff TO authenticated;
-GRANT ALL ON availability_overrides TO authenticated;
-GRANT ALL ON availability_template_sets TO authenticated;
-GRANT ALL ON availability_template_set_items TO authenticated;
-*/ 
-
--- ==========================================
--- SECTION 9: BUSINESS-WIDE AVAILABILITY POOLING
--- ==========================================
-
--- Function to get all available consultants for a specific date/time
+-- 2. Function to get all available consultants for a specific date/time (UPDATED)
 CREATE OR REPLACE FUNCTION get_available_consultants(
   target_date DATE,
   target_time TIME,
@@ -905,34 +403,149 @@ CREATE OR REPLACE FUNCTION get_available_consultants(
   available_slots INTEGER
 ) AS $$
 DECLARE
-  end_time TIME;
+    end_time TIME;
 BEGIN
-  end_time := target_time + (service_duration_minutes || ' minutes')::INTERVAL;
+    end_time := target_time + (service_duration_minutes || ' minutes')::INTERVAL;
+
+    RETURN QUERY
+    WITH consultant_availability AS (
+        SELECT
+            consultants.consultant_id, -- FIX: Was cda.consultant_id, which is invalid.
+            cda.available_start,
+            cda.available_end,
+            cda.max_bookings
+        FROM (
+            SELECT DISTINCT at.consultant_id FROM public.availability_templates at WHERE at.is_active = TRUE
+        ) consultants
+        CROSS JOIN LATERAL public.calculate_daily_availability(consultants.consultant_id, target_date) cda
+        WHERE cda.available_start <= target_time
+          AND cda.available_end >= end_time
+    ),
+    consultant_bookings AS (
+        SELECT
+            b.consultant_id,
+            COUNT(*)::INTEGER as current_bookings
+        FROM public.bookings b
+        WHERE b.scheduled_date = target_date
+          AND b.scheduled_time >= target_time
+          AND b.scheduled_time < end_time
+          AND b.status IN ('confirmed', 'pending')
+        GROUP BY b.consultant_id
+    ),
+    consultant_info AS (
+        SELECT
+            p.id,
+            CONCAT(p.first_name, ' ', p.last_name) as full_name
+        FROM public.profiles p
+        WHERE p.is_staff = TRUE
+    )
+    SELECT
+        ca.consultant_id,
+        ci.full_name,
+        ca.available_start,
+        ca.available_end,
+        ca.max_bookings,
+        COALESCE(cb.current_bookings, 0)::INTEGER,
+        (ca.max_bookings - COALESCE(cb.current_bookings, 0))::INTEGER
+    FROM consultant_availability ca
+    LEFT JOIN consultant_bookings cb ON ca.consultant_id = cb.consultant_id
+    LEFT JOIN consultant_info ci ON ca.consultant_id = ci.id
+    WHERE ca.max_bookings > COALESCE(cb.current_bookings, 0)
+    ORDER BY (ca.max_bookings - COALESCE(cb.current_bookings, 0)) DESC, ci.full_name;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- ==========================================
+-- SECTION 4: BUFFER TIME FUNCTIONS (MISSING FROM ORIGINAL)
+-- ==========================================
+
+-- Function to get effective buffer time for a consultant-service combination
+-- NOTE: This function already exists in your database - this is for documentation
+-- CREATE OR REPLACE FUNCTION get_effective_buffer_time(
+--   consultant_id_param UUID,
+--   service_id_param UUID
+-- ) RETURNS TABLE (
+--   buffer_before_minutes SMALLINT,
+--   buffer_after_minutes SMALLINT
+-- ) AS $$
+-- -- Function exists in database with proper logic
+-- $$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Enhanced function to get available consultants with buffer time consideration
+-- ACTUAL FUNCTION FROM DATABASE (with corrected return types):
+CREATE OR REPLACE FUNCTION get_available_consultants_with_buffer(
+  target_date DATE,
+  target_time TIME,
+  service_id_param UUID
+) RETURNS TABLE (
+  consultant_id UUID,
+  consultant_name TEXT,
+  available_start TIME,
+  available_end TIME,
+  max_bookings SMALLINT,
+  current_bookings BIGINT, -- NOTE: Returns BIGINT, not INTEGER
+  available_slots BIGINT,  -- NOTE: Returns BIGINT, not INTEGER
+  total_duration_minutes INTEGER,
+  buffer_before INTEGER,
+  buffer_after INTEGER
+) AS $$
+DECLARE
+  service_duration INTEGER;
+BEGIN
+  -- Get service duration
+  SELECT s.duration_minutes INTO service_duration
+  FROM services s
+  WHERE s.id = service_id_param;
   
   RETURN QUERY
-  WITH consultant_availability AS (
+  WITH consultant_buffer_info AS (
     SELECT 
-      cda.consultant_id,
-      cda.available_start,
-      cda.available_end,
-      cda.max_bookings
+      consultants.consultant_id,
+      bt.buffer_before_minutes,
+      bt.buffer_after_minutes,
+      (target_time - (bt.buffer_before_minutes || ' minutes')::INTERVAL)::TIME as required_start_time,
+      (target_time + (service_duration + bt.buffer_after_minutes || ' minutes')::INTERVAL)::TIME as required_end_time
     FROM (
-      SELECT DISTINCT consultant_id FROM availability_templates WHERE is_active = TRUE
+      SELECT DISTINCT at.consultant_id 
+      FROM availability_templates at 
+      WHERE at.is_active = TRUE
     ) consultants
-    CROSS JOIN LATERAL calculate_daily_availability(consultants.consultant_id, target_date) cda
-    WHERE cda.available_start <= target_time 
-      AND cda.available_end >= end_time
+    CROSS JOIN LATERAL get_effective_buffer_time(consultants.consultant_id, service_id_param) bt
+  ),
+  consultant_availability AS (
+    SELECT 
+      cbi.consultant_id,
+      cbi.buffer_before_minutes,
+      cbi.buffer_after_minutes,
+      cbi.required_start_time,
+      cbi.required_end_time,
+      da.available_start,
+      da.available_end,
+      da.max_bookings  -- This comes from calculate_daily_availability, no ambiguity
+    FROM consultant_buffer_info cbi
+    CROSS JOIN LATERAL calculate_daily_availability(cbi.consultant_id, target_date) da
+    WHERE da.available_start <= cbi.required_start_time 
+      AND da.available_end >= cbi.required_end_time
   ),
   consultant_bookings AS (
     SELECT 
-      consultant_id,
-      COUNT(*) as current_bookings
-    FROM bookings
-    WHERE scheduled_date = target_date
-      AND scheduled_time >= target_time
-      AND scheduled_time < end_time
-      AND status IN ('confirmed', 'pending')
-    GROUP BY consultant_id
+      b.consultant_id,
+      COUNT(*) as booking_count
+    FROM bookings b
+    INNER JOIN services s ON b.service_id = s.id
+    WHERE b.scheduled_date = target_date
+      AND b.status IN ('confirmed', 'pending')
+      AND b.consultant_id IS NOT NULL
+      AND EXISTS (
+        SELECT 1 FROM consultant_availability ca 
+        WHERE ca.consultant_id = b.consultant_id
+        AND (
+          -- Check if booking conflicts with our time slot + buffer
+          b.scheduled_time - INTERVAL '5 minutes' <= ca.required_end_time AND 
+          b.scheduled_time + (s.duration_minutes + 5 || ' minutes')::INTERVAL >= ca.required_start_time
+        )
+      )
+    GROUP BY b.consultant_id
   ),
   consultant_info AS (
     SELECT 
@@ -943,151 +556,258 @@ BEGIN
   )
   SELECT 
     ca.consultant_id,
-    ci.full_name,
+    COALESCE(ci.full_name, 'Available Consultant') as consultant_name,
     ca.available_start,
     ca.available_end,
-    ca.max_bookings,
-    COALESCE(cb.current_bookings, 0),
-    ca.max_bookings - COALESCE(cb.current_bookings, 0)
+    ca.max_bookings,  -- From calculate_daily_availability result, no ambiguity
+    COALESCE(cb.booking_count, 0::BIGINT) as current_bookings,
+    (ca.max_bookings::BIGINT - COALESCE(cb.booking_count, 0::BIGINT)) as available_slots,
+    (service_duration + ca.buffer_before_minutes + ca.buffer_after_minutes) as total_duration_minutes,
+    ca.buffer_before_minutes::INTEGER as buffer_before,
+    ca.buffer_after_minutes::INTEGER as buffer_after
   FROM consultant_availability ca
   LEFT JOIN consultant_bookings cb ON ca.consultant_id = cb.consultant_id
   LEFT JOIN consultant_info ci ON ca.consultant_id = ci.id
-  WHERE ca.max_bookings > COALESCE(cb.current_bookings, 0)
-  ORDER BY (ca.max_bookings - COALESCE(cb.current_bookings, 0)) DESC, ci.full_name;
+  WHERE ca.max_bookings > COALESCE(cb.booking_count, 0)
+  ORDER BY (ca.max_bookings::BIGINT - COALESCE(cb.booking_count, 0::BIGINT)) DESC, ci.full_name;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- Function to get business-wide availability summary
+-- Function to find optimal consultant assignment with buffer time consideration
+-- ACTUAL FUNCTION FROM DATABASE (with corrected return types):
+CREATE OR REPLACE FUNCTION get_optimal_consultant_assignment(
+  target_date DATE,
+  target_time TIME,
+  service_id_param UUID,
+  assignment_strategy TEXT DEFAULT 'optimal'
+) RETURNS TABLE (
+  consultant_id UUID,
+  consultant_name TEXT,
+  assignment_reason TEXT,
+  confidence_score NUMERIC  -- NOTE: Returns NUMERIC, not DECIMAL(3,2)
+) AS $$
+BEGIN
+  RETURN QUERY
+  WITH available_consultants AS (
+    SELECT * FROM get_available_consultants_with_buffer(target_date, target_time, service_id_param)
+    WHERE available_slots > 0
+  ),
+  ranked_consultants AS (
+    SELECT 
+      ac.consultant_id,
+      ac.consultant_name,
+      CASE assignment_strategy
+        WHEN 'optimal' THEN 
+          ROW_NUMBER() OVER (ORDER BY ac.available_slots DESC, ac.consultant_name)
+        WHEN 'balanced' THEN 
+          ROW_NUMBER() OVER (ORDER BY ac.current_bookings ASC, ac.consultant_name)
+        WHEN 'random' THEN 
+          ROW_NUMBER() OVER (ORDER BY random())
+        ELSE 
+          ROW_NUMBER() OVER (ORDER BY ac.consultant_name)
+      END as rank,
+      CASE assignment_strategy
+        WHEN 'optimal' THEN 'Optimal balance of availability and workload'
+        WHEN 'balanced' THEN 'Load balancing - least busy consultant'
+        WHEN 'random' THEN 'Random assignment for testing'
+        ELSE 'First available consultant'
+      END as reason,
+      CASE assignment_strategy
+        WHEN 'optimal' THEN (ac.available_slots::DECIMAL / ac.max_bookings::DECIMAL)
+        WHEN 'balanced' THEN ((ac.max_bookings::BIGINT - ac.current_bookings)::DECIMAL / ac.max_bookings::DECIMAL)
+        ELSE 1.0
+      END as score
+    FROM available_consultants ac
+  )
+  SELECT 
+    rc.consultant_id,
+    rc.consultant_name,
+    rc.reason as assignment_reason,
+    rc.score as confidence_score
+  FROM ranked_consultants rc
+  WHERE rc.rank = 1;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- ==========================================
+-- SECTION 5: TEMPLATE MANAGEMENT FUNCTIONS
+-- ==========================================
+
+-- Function to save template set (UPDATED)
+CREATE OR REPLACE FUNCTION save_template_set(
+  consultant_id_param UUID,
+  set_name_param VARCHAR,
+  description_param TEXT DEFAULT NULL
+) RETURNS JSON AS $$
+DECLARE
+    v_template_set_id UUID; -- FIX: Renamed variable to avoid shadowing column name
+    template_record RECORD;
+BEGIN
+    -- Create or update template set
+    INSERT INTO public.availability_template_sets (consultant_id, set_name, description)
+    VALUES (consultant_id_param, set_name_param, description_param)
+    ON CONFLICT (consultant_id, set_name) DO UPDATE SET
+        description = EXCLUDED.description,
+        updated_at = NOW()
+    RETURNING id INTO v_template_set_id; -- FIX: Use new variable name
+
+    -- Clear existing items for this template set
+    -- FIX: Use the variable in the WHERE clause to correctly identify the set to delete from.
+    DELETE FROM public.availability_template_set_items
+    WHERE template_set_id = v_template_set_id;
+
+    -- Save current active templates to the set
+    FOR template_record IN
+        SELECT day_of_week, start_time, end_time, max_bookings
+        FROM public.availability_templates
+        WHERE consultant_id = consultant_id_param AND is_active = TRUE
+    LOOP
+        INSERT INTO public.availability_template_set_items (
+            template_set_id, day_of_week, start_time, end_time, max_bookings
+        ) VALUES (
+            v_template_set_id, -- FIX: Use new variable name
+            template_record.day_of_week,
+            template_record.start_time,
+            template_record.end_time,
+            template_record.max_bookings
+        );
+    END LOOP;
+
+    RETURN json_build_object('success', true, 'template_set_id', v_template_set_id);
+EXCEPTION
+    WHEN others THEN
+        RETURN json_build_object('success', false, 'error', SQLERRM);
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- ==========================================
+-- SECTION 5: BUSINESS AVAILABILITY SUMMARY FUNCTION
+-- ==========================================
+
+-- Function to get business availability summary (NEW)
 CREATE OR REPLACE FUNCTION get_business_availability_summary(
   start_date_param DATE,
   end_date_param DATE,
-  service_duration_minutes INTEGER DEFAULT 60
+  service_id_param UUID,
+  slot_check_interval_minutes INTEGER DEFAULT 15
 ) RETURNS TABLE (
   date_val DATE,
   day_name TEXT,
-  total_consultants INTEGER,
-  available_consultants INTEGER,
-  total_slots INTEGER,
-  available_slots INTEGER,
+  total_consultants BIGINT,
+  available_consultants BIGINT,
+  total_slots BIGINT,
+  available_slots BIGINT,
   peak_availability_time TIME,
   peak_available_slots INTEGER
 ) AS $$
 DECLARE
-  current_date DATE;
-  time_slot TIME;
-  max_slots INTEGER;
-  peak_time TIME;
+    date_iter DATE;
+    time_slot TIME;
+    service_rec RECORD;
+    consultants_at_slot INTEGER;
+    current_peak_slots INTEGER;
+    num_bookings BIGINT;
+    time_slot_interval INTERVAL;
 BEGIN
-  current_date := start_date_param;
-  
-  WHILE current_date <= end_date_param LOOP
-    -- Initialize counters
-    total_consultants := (SELECT COUNT(*) FROM profiles WHERE is_staff = TRUE);
-    available_consultants := 0;
-    total_slots := 0;
-    available_slots := 0;
-    max_slots := 0;
-    peak_time := '09:00'::TIME;
-    
-    -- Count available consultants for this date
-    SELECT 
-      COUNT(DISTINCT consultant_id),
-      SUM(max_bookings),
-      SUM(max_bookings - COALESCE(current_bookings, 0))
-    INTO available_consultants, total_slots, available_slots
-    FROM (
-      SELECT DISTINCT consultant_id FROM availability_templates WHERE is_active = TRUE
-    ) consultants
-    CROSS JOIN LATERAL calculate_daily_availability(consultants.consultant_id, current_date) cda
-    LEFT JOIN (
-      SELECT 
-        consultant_id,
-        COUNT(*) as current_bookings
-      FROM bookings
-      WHERE scheduled_date = current_date
-        AND status IN ('confirmed', 'pending')
-      GROUP BY consultant_id
-    ) cb ON consultants.consultant_id = cb.consultant_id;
-    
-    -- Find peak availability time (most available slots)
-    FOR time_slot IN 
-      SELECT generate_series('08:00'::TIME, '18:00'::TIME, '30 minutes'::INTERVAL)::TIME
-    LOOP
-      SELECT COUNT(*) INTO max_slots
-      FROM get_available_consultants(current_date, time_slot, service_duration_minutes);
-      
-      IF max_slots > peak_available_slots THEN
-        peak_available_slots := max_slots;
-        peak_availability_time := time_slot;
-      END IF;
+    -- Validate that a service was provided
+    SELECT * INTO service_rec FROM public.services WHERE id = service_id_param;
+    IF NOT FOUND THEN
+        RAISE EXCEPTION 'Service with ID % not found.', service_id_param;
+    END IF;
+
+    time_slot_interval := (slot_check_interval_minutes || ' minutes')::INTERVAL;
+    date_iter := start_date_param;
+
+    WHILE date_iter <= end_date_param LOOP
+        -- Initialize counters for the current day
+        total_consultants := (SELECT COUNT(*) FROM public.profiles WHERE is_staff = TRUE);
+        available_consultants := 0;
+        total_slots := 0;
+        peak_availability_time := '00:00:00'::TIME;
+        current_peak_slots := -1;
+
+        -- Calculate total potential slots and the number of consultants available for this service
+        WITH consultant_service_duration AS (
+            -- For each consultant, get the total time needed for the service, including their specific buffer
+            SELECT
+                p.id AS consultant_id,
+                (service_rec.duration_minutes + buf.buffer_before_minutes + buf.buffer_after_minutes) AS total_minutes
+            FROM
+                public.profiles p
+            CROSS JOIN LATERAL public.get_effective_buffer_time(p.id, service_id_param) buf
+            WHERE
+                p.is_staff = TRUE
+        ),
+        consultant_potential_slots AS (
+            -- For each consultant, calculate how many times the service can fit into their daily availability
+            SELECT
+                csd.consultant_id,
+                SUM(
+                    -- Calculate how many slots fit in each availability block
+                    FLOOR(EXTRACT(EPOCH FROM (cda.available_end - cda.available_start)) / 60 / csd.total_minutes)
+                ) AS potential_slots
+            FROM
+                consultant_service_duration csd
+            CROSS JOIN LATERAL public.calculate_daily_availability(csd.consultant_id, date_iter) cda
+            WHERE
+                csd.total_minutes > 0 -- Avoid division by zero
+            GROUP BY
+                csd.consultant_id
+        )
+        SELECT
+            COUNT(*),         -- Number of consultants who can take at least one booking
+            SUM(cps.potential_slots) -- Total theoretical slots across all consultants
+        INTO available_consultants, total_slots
+        FROM consultant_potential_slots cps
+        WHERE cps.potential_slots > 0;
+
+        -- Find peak availability time (most available consultants for this specific service)
+        FOR time_slot IN
+            SELECT generate_series('08:00'::TIME, '18:00'::TIME, time_slot_interval)::TIME
+        LOOP
+            -- Use the buffer-aware function to get available consultants
+            SELECT COUNT(*) INTO consultants_at_slot
+            FROM public.get_available_consultants_with_buffer(date_iter, time_slot, service_id_param);
+
+            IF consultants_at_slot > current_peak_slots THEN
+                current_peak_slots := consultants_at_slot;
+                peak_availability_time := time_slot;
+            END IF;
+        END LOOP;
+
+        -- Calculate available slots by subtracting existing bookings for the day
+        SELECT COUNT(*) INTO num_bookings
+        FROM public.bookings b
+        WHERE b.service_id = service_id_param
+          AND b.scheduled_date = date_iter
+          AND b.status IN ('confirmed', 'pending');
+
+        date_val := date_iter;
+        day_name := TO_CHAR(date_iter, 'Day');
+        available_slots := GREATEST(0, COALESCE(total_slots, 0) - num_bookings);
+        peak_available_slots := GREATEST(0, current_peak_slots);
+
+        RETURN NEXT;
+        date_iter := date_iter + INTERVAL '1 day';
     END LOOP;
-    
-    -- Return row for this date
-    date_val := current_date;
-    day_name := TO_CHAR(current_date, 'Day');
-    peak_availability_time := peak_time;
-    
-    RETURN NEXT;
-    current_date := current_date + INTERVAL '1 day';
-  END LOOP;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- Function to find optimal booking slots across all consultants
-CREATE OR REPLACE FUNCTION find_optimal_booking_slots(
-  preferred_date DATE,
-  service_duration_minutes INTEGER DEFAULT 60,
-  max_results INTEGER DEFAULT 10
-) RETURNS TABLE (
-  suggested_datetime TIMESTAMP WITH TIME ZONE,
-  consultant_id UUID,
-  consultant_name TEXT,
-  available_slots INTEGER,
-  business_load_score DECIMAL(3,2) -- Lower is better (less busy)
-) AS $$
-DECLARE
-  time_slot TIME;
-  consultant_record RECORD;
-  total_business_slots INTEGER;
-  slot_datetime TIMESTAMP WITH TIME ZONE;
-BEGIN
-  -- Get total business capacity for load calculation
-  SELECT SUM(max_bookings) INTO total_business_slots
-  FROM availability_templates
-  WHERE is_active = TRUE;
-  
-  -- Generate time slots and find available consultants
-  FOR time_slot IN 
-    SELECT generate_series('08:00'::TIME, '17:00'::TIME, '30 minutes'::INTERVAL)::TIME
-  LOOP
-    slot_datetime := preferred_date + time_slot;
-    
-    -- Get available consultants for this time slot
-    FOR consultant_record IN
-      SELECT * FROM get_available_consultants(preferred_date, time_slot, service_duration_minutes)
-      WHERE available_slots > 0
-      ORDER BY available_slots DESC
-      LIMIT max_results
-    LOOP
-      suggested_datetime := slot_datetime;
-      consultant_id := consultant_record.consultant_id;
-      consultant_name := consultant_record.consultant_name;
-      available_slots := consultant_record.available_slots;
-      
-      -- Calculate business load score (0.0 = no load, 1.0 = fully loaded)
-      business_load_score := CASE 
-        WHEN total_business_slots > 0 THEN
-          1.0 - (consultant_record.available_slots::DECIMAL / total_business_slots::DECIMAL)
-        ELSE 0.0
-      END;
-      
-      RETURN NEXT;
-    END LOOP;
-  END LOOP;
-END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
-
--- Grant permissions for business availability functions
+-- Grant permissions
+GRANT USAGE ON SCHEMA public TO authenticated;
+GRANT ALL ON profiles TO authenticated;
+GRANT EXECUTE ON FUNCTION update_user_profile TO authenticated;
+GRANT EXECUTE ON FUNCTION get_user_profile TO authenticated;
+GRANT EXECUTE ON FUNCTION get_user_email TO authenticated;
+GRANT EXECUTE ON FUNCTION get_user_phone TO authenticated;
+GRANT EXECUTE ON FUNCTION is_staff_user TO authenticated;
+GRANT EXECUTE ON FUNCTION calculate_lead_score TO authenticated;
+GRANT EXECUTE ON FUNCTION generate_booking_reference TO authenticated;
+GRANT EXECUTE ON FUNCTION calculate_daily_availability TO authenticated;
 GRANT EXECUTE ON FUNCTION get_available_consultants TO authenticated;
+GRANT EXECUTE ON FUNCTION get_effective_buffer_time TO authenticated;
+GRANT EXECUTE ON FUNCTION get_available_consultants_with_buffer TO authenticated;
+GRANT EXECUTE ON FUNCTION get_optimal_consultant_assignment TO authenticated;
+GRANT EXECUTE ON FUNCTION save_template_set TO authenticated;
 GRANT EXECUTE ON FUNCTION get_business_availability_summary TO authenticated;
-GRANT EXECUTE ON FUNCTION find_optimal_booking_slots TO authenticated; 
+GRANT USAGE ON SEQUENCE booking_ref_seq TO authenticated; 

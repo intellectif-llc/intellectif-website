@@ -15,6 +15,7 @@ export interface BookingData {
     description: string;
     features: string[];
     popular?: boolean;
+    slug: string;
   } | null;
   dateTime: {
     date: string;
@@ -83,6 +84,7 @@ export default function BookingPage() {
             }
             onNext={handleNextStep}
             onPrevious={handlePreviousStep}
+            serviceId={bookingData.service?.id}
           />
         );
       case 3:

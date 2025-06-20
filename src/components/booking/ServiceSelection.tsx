@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState, useEffect } from "react";
 
 interface Service {
   id: string;
@@ -8,6 +8,7 @@ interface Service {
   description: string;
   features: string[];
   popular?: boolean;
+  slug: string;
 }
 
 interface ServiceSelectionProps {
@@ -16,49 +17,75 @@ interface ServiceSelectionProps {
   onNext: () => void;
 }
 
-const services: Service[] = [
-  {
-    id: "free-discovery",
-    name: "Free Project Discovery",
-    price: 0,
-    duration: 15,
-    description:
-      "Perfect for initial project exploration and lead qualification. We'll discuss your vision and provide preliminary guidance.",
-    features: [
-      "15-minute online consultation",
-      "Project scope discussion",
-      "Technology recommendations",
-      "Next steps guidance",
-      "No commitment required",
-    ],
-  },
-  {
-    id: "paid-consultation",
-    name: "Technical Strategy Consultation",
-    price: 150,
-    duration: 60,
-    description:
-      "Comprehensive technical consultation with actionable deliverables. Get a detailed strategic roadmap for your project.",
-    features: [
-      "60-minute deep-dive session",
-      "Detailed technical analysis",
-      "Strategic roadmap document",
-      "Architecture recommendations",
-      "Timeline & budget estimates",
-      "Follow-up report (24-48h)",
-    ],
-    popular: true,
-  },
-];
-
 export default function ServiceSelection({
   selectedService,
   onServiceSelect,
   onNext,
 }: ServiceSelectionProps) {
+  const [services, setServices] = useState<Service[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  // Fetch services from database
+  useEffect(() => {
+    const fetchServices = async () => {
+      try {
+        setLoading(true);
+        const response = await fetch("/api/services");
+
+        if (!response.ok) {
+          throw new Error("Failed to fetch services");
+        }
+
+        const data = await response.json();
+        setServices(data.services || []);
+      } catch (err) {
+        console.error("Error fetching services:", err);
+        setError("Failed to load services. Please refresh the page.");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchServices();
+  }, []);
+
   const handleServiceSelect = (service: Service) => {
     onServiceSelect(service);
   };
+
+  if (loading) {
+    return (
+      <div className="py-8">
+        <div className="text-center mb-12">
+          <h2 className="text-3xl sm:text-4xl font-bold text-white mb-4">
+            Choose Your Consultation Type
+          </h2>
+          <p className="text-lg text-[#64748b] max-w-2xl mx-auto">
+            Loading available services...
+          </p>
+        </div>
+        <div className="flex justify-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#6bdcc0]"></div>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="py-8">
+        <div className="text-center mb-12">
+          <h2 className="text-3xl sm:text-4xl font-bold text-white mb-4">
+            Choose Your Consultation Type
+          </h2>
+          <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-4 max-w-md mx-auto">
+            <p className="text-red-400">{error}</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="py-8">
