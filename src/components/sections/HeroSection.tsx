@@ -45,7 +45,7 @@ const HeroSection: React.FC = () => {
 
           <div className="flex flex-col sm:flex-row gap-4 sm:gap-6 justify-center items-center px-4">
             <a
-              href="/contact"
+              href="/booking"
               className="group relative inline-flex items-center justify-center w-full sm:w-auto px-8 sm:px-10 py-4 text-base sm:text-lg font-bold rounded-2xl transition-all duration-500 ease-out hover:scale-[1.02] shadow-xl focus:outline-none focus:ring-4 focus:ring-[#6bdcc0]/30 focus:ring-offset-2 focus:ring-offset-[#051028] transform hover:-translate-y-2 overflow-hidden border-2 border-transparent hover:border-[#6bdcc0] hover:shadow-2xl backdrop-blur-sm"
               style={{
                 background:

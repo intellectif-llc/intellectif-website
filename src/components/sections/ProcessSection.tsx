@@ -139,7 +139,7 @@ const ProcessSection: React.FC = () => {
             Let&apos;s discuss your project and see how we can help bring your
             vision to life.
           </p>
-          <Button variant="primary" size="lg" href="/contact">
+          <Button variant="primary" size="lg" href="/booking">
             Start Your Project Today
           </Button>
         </div>

@@ -173,7 +173,6 @@ export const PROCESS_STEPS = [
 export const NAVIGATION_ITEMS = [
   { label: "Home", href: "/" },
   { label: "Book a Meeting", href: "/booking" },
-  { label: "Contact Us", href: "/contact" },
 ];
 
 export const AUTH_NAVIGATION_ITEMS = [
