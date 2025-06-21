@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Toaster } from "react-hot-toast";
 import Header from "@/components/layout/Header";
+import Footer from "@/components/layout/Footer";
 import { AuthProvider } from "@/contexts/AuthContext";
 import "./globals.css";
 
@@ -46,6 +47,7 @@ export default function RootLayout({
         <AuthProvider>
           <Header />
           <main className="relative">{children}</main>
+          <Footer />
           <Toaster
             position="top-right"
             toastOptions={{
