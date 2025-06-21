@@ -55,7 +55,8 @@ export async function GET(request: NextRequest) {
         // If we have available consultants, include this date
         if (consultants && consultants.length > 0) {
           const hasAvailableSlots = consultants.some(
-            (consultant: any) => consultant.available_slots > 0
+            (consultant: { available_slots: number }) =>
+              consultant.available_slots > 0
           );
 
           if (hasAvailableSlots) {
@@ -74,7 +75,7 @@ export async function GET(request: NextRequest) {
               }),
               dayOfWeek: currentDate.getDay(),
               totalAvailableSlots: consultants.reduce(
-                (sum: number, consultant: any) =>
+                (sum: number, consultant: { available_slots?: number }) =>
                   sum + (consultant.available_slots || 0),
                 0
               ),

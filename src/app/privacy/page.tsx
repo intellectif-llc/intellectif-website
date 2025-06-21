@@ -174,7 +174,8 @@ const PrivacyPolicyPage: React.FC = () => {
                     Quick Deletion
                   </h4>
                   <p className="text-gray-300 text-sm">
-                    Request data removal and we'll process it within 24 hours
+                    Request data removal and we&apos;ll process it within 24
+                    hours
                   </p>
                 </div>
                 <div>

@@ -23,9 +23,9 @@ const TermsAndConditionsPage: React.FC = () => {
           </h1>
           <p className="text-xl text-[#64748b] max-w-4xl mx-auto leading-relaxed">
             Welcome to Intellectif! These Terms and Conditions outline the rules
-            and regulations for the use of Intellectif's website, products, and
-            services. By accessing or using our services, you accept these terms
-            in full.
+            and regulations for the use of Intellectif&apos;s website, products,
+            and services. By accessing or using our services, you accept these
+            terms in full.
           </p>
         </div>
 
@@ -41,27 +41,27 @@ const TermsAndConditionsPage: React.FC = () => {
                 <li className="flex items-start gap-3">
                   <div className="w-2 h-2 bg-[#6bdcc0] rounded-full mt-2 flex-shrink-0"></div>
                   <span>
-                    <strong className="text-white">"Company"</strong> refers to
-                    Intellectif LLC, a registered business operating from Latin
-                    America with a virtual office in Miami, FL.
+                    <strong className="text-white">&quot;Company&quot;</strong>{" "}
+                    refers to Intellectif LLC, a registered business operating
+                    from Latin America with a virtual office in Miami, FL.
                   </span>
                 </li>
                 <li className="flex items-start gap-3">
                   <div className="w-2 h-2 bg-[#6bdcc0] rounded-full mt-2 flex-shrink-0"></div>
                   <span>
-                    <strong className="text-white">"Client"</strong> refers to
-                    any person or entity using or engaging with Intellectif's
-                    services.
+                    <strong className="text-white">&quot;Client&quot;</strong>{" "}
+                    refers to any person or entity using or engaging with
+                    Intellectif&apos;s services.
                   </span>
                 </li>
                 <li className="flex items-start gap-3">
                   <div className="w-2 h-2 bg-[#6bdcc0] rounded-full mt-2 flex-shrink-0"></div>
                   <span>
-                    <strong className="text-white">"Services"</strong> refers to
-                    all IT-related and business consulting services offered by
-                    Intellectif, including but not limited to Web Development,
-                    Backend Development, AWS Cloud Consulting, Mobile App
-                    Development, Digital Marketing, and AI systems
+                    <strong className="text-white">&quot;Services&quot;</strong>{" "}
+                    refers to all IT-related and business consulting services
+                    offered by Intellectif, including but not limited to Web
+                    Development, Backend Development, AWS Cloud Consulting,
+                    Mobile App Development, Digital Marketing, and AI systems
                     implementation.
                   </span>
                 </li>

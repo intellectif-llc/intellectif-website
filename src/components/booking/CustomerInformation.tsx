@@ -1,6 +1,8 @@
 import React, { useState } from "react";
 import toast from "react-hot-toast";
 import { BookingData } from "@/app/booking/page";
+import Turnstile from "@/components/ui/Turnstile";
+import { useTurnstile } from "@/hooks/useTurnstile";
 
 interface CustomerData {
   firstName: string;
@@ -36,6 +38,20 @@ export default function CustomerInformation({
   const [errors, setErrors] = useState<Partial<CustomerData>>({});
   const [submitting, setSubmitting] = useState(false);
 
+  // Turnstile hook
+  const {
+    token: _token,
+    isVerified,
+    isLoading: _isLoading,
+    error: turnstileError,
+    turnstileRef,
+    handleSuccess: handleTurnstileSuccess,
+    handleError: handleTurnstileError,
+    handleExpire: handleTurnstileExpire,
+    validateToken,
+    reset: _resetTurnstile,
+  } = useTurnstile();
+
   const handleInputChange = (field: keyof CustomerData, value: string) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
     onCustomerDataUpdate({ ...formData, [field]: value });
@@ -67,6 +83,12 @@ export default function CustomerInformation({
 
   const handleSubmit = async () => {
     if (!validateForm()) return;
+
+    // Validate Turnstile first
+    const isTurnstileValid = await validateToken();
+    if (!isTurnstileValid) {
+      return;
+    }
 
     setSubmitting(true);
     try {
@@ -113,9 +135,8 @@ export default function CustomerInformation({
     }
   };
 
-  const canSubmit = Object.values(formData).every(
-    (value) => value.trim() !== ""
-  );
+  const canSubmit =
+    Object.values(formData).every((value) => value.trim() !== "") && isVerified;
 
   return (
     <div className="py-8">
@@ -285,7 +306,7 @@ export default function CustomerInformation({
                       ? "border-red-500 focus:border-red-500"
                       : "border-[#64748b] focus:border-[#6bdcc0]"
                   }`}
-                  placeholder="Brief description of your project, goals, and what you'd like to discuss during the consultation..."
+                  placeholder="Please describe your project, goals, and what you're looking to achieve..."
                 />
                 {errors.projectDescription && (
                   <p className="text-red-400 text-sm mt-2">
@@ -293,6 +314,47 @@ export default function CustomerInformation({
                   </p>
                 )}
               </div>
+
+              {/* Turnstile Widget - Clean, minimal integration */}
+              <div className="md:col-span-2 flex justify-center py-4">
+                <Turnstile
+                  ref={turnstileRef}
+                  onSuccess={handleTurnstileSuccess}
+                  onError={handleTurnstileError}
+                  onExpire={handleTurnstileExpire}
+                />
+              </div>
+
+              {/* Turnstile Error (if any) */}
+              {turnstileError && (
+                <div className="md:col-span-2 p-3 bg-red-500/10 border border-red-500/20 rounded-lg">
+                  <p className="text-red-400 text-sm text-center">
+                    {turnstileError}
+                  </p>
+                </div>
+              )}
+
+              {/* Success confirmation */}
+              {isVerified && (
+                <div className="md:col-span-2 p-3 bg-green-500/10 border border-green-500/20 rounded-lg">
+                  <p className="text-green-400 text-sm text-center flex items-center justify-center">
+                    <svg
+                      className="w-4 h-4 mr-2"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M5 13l4 4L19 7"
+                      />
+                    </svg>
+                    Security verification completed
+                  </p>
+                </div>
+              )}
             </div>
           </div>
         </div>

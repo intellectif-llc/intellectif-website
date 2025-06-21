@@ -37,10 +37,8 @@ export default function ForgotPasswordPage() {
         setSuccess("Check your email for a password reset link!");
         setEmail("");
       }
-    } catch (error) {
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
-      const _unused = error;
-      setError("An unexpected error occurred");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "An error occurred");
     } finally {
       setIsLoading(false);
     }

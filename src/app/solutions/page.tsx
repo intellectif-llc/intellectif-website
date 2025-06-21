@@ -156,7 +156,7 @@ const SolutionsPage: React.FC = () => {
               </div>
 
               <p className="text-xs text-gray-500 mt-4">
-                * Special pricing available through Intellectif partnership
+                * Special pricing available through partnership
               </p>
             </div>
           </div>

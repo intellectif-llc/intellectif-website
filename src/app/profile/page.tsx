@@ -117,9 +117,9 @@ export default function ProfilePage() {
         setTimeout(() => setSuccess(""), 3000);
       }
     } catch (error) {
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
-      const _unused = error;
-      setError("An unexpected error occurred");
+      setError(
+        error instanceof Error ? error.message : "An unexpected error occurred"
+      );
     } finally {
       setIsLoading(false);
     }

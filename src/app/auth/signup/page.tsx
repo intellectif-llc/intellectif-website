@@ -4,6 +4,8 @@ import { useState } from "react";
 import Link from "next/link";
 import { useAuth } from "@/contexts/AuthContext";
 import Button from "@/components/ui/Button";
+import Turnstile from "@/components/ui/Turnstile";
+import { useTurnstile } from "@/hooks/useTurnstile";
 
 export default function SignUpPage() {
   const [email, setEmail] = useState("");
@@ -16,6 +18,18 @@ export default function SignUpPage() {
   const [success, setSuccess] = useState("");
 
   const { signUp } = useAuth();
+
+  // Turnstile integration
+  const {
+    isVerified,
+    error: turnstileError,
+    turnstileRef,
+    handleSuccess: handleTurnstileSuccess,
+    handleError: handleTurnstileError,
+    handleExpire: handleTurnstileExpire,
+    validateToken,
+    reset: resetTurnstile,
+  } = useTurnstile();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -46,6 +60,13 @@ export default function SignUpPage() {
       return;
     }
 
+    // Validate Turnstile
+    const isTurnstileValid = await validateToken();
+    if (!isTurnstileValid) {
+      setError("Please complete the security verification");
+      return;
+    }
+
     setIsLoading(true);
 
     try {
@@ -57,6 +78,8 @@ export default function SignUpPage() {
 
       if (error) {
         setError(error.message);
+        // Reset Turnstile on error to allow retry
+        resetTurnstile();
       } else {
         setSuccess("Check your email for a confirmation link!");
         // Clear form
@@ -65,11 +88,14 @@ export default function SignUpPage() {
         setConfirmPassword("");
         setFirstName("");
         setLastName("");
+        resetTurnstile();
       }
     } catch (error) {
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
-      const _unused = error;
-      setError("An unexpected error occurred");
+      setError(
+        error instanceof Error ? error.message : "An unexpected error occurred"
+      );
+      // Reset Turnstile on error to allow retry
+      resetTurnstile();
     } finally {
       setIsLoading(false);
     }
@@ -229,6 +255,25 @@ export default function SignUpPage() {
               />
             </div>
 
+            {/* Turnstile Widget - Clean, minimal integration */}
+            <div className="flex justify-center py-2">
+              <Turnstile
+                ref={turnstileRef}
+                onSuccess={handleTurnstileSuccess}
+                onError={handleTurnstileError}
+                onExpire={handleTurnstileExpire}
+              />
+            </div>
+
+            {/* Turnstile Error (if any) */}
+            {turnstileError && (
+              <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-3">
+                <p className="text-red-400 text-sm text-center">
+                  {turnstileError}
+                </p>
+              </div>
+            )}
+
             {/* Error Message */}
             {error && (
               <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-4">
@@ -249,7 +294,7 @@ export default function SignUpPage() {
               variant="primary"
               size="lg"
               isLoading={isLoading}
-              disabled={isLoading}
+              disabled={isLoading || !isVerified}
               className="w-full"
             >
               {isLoading ? "Creating Account..." : "Create Account"}
