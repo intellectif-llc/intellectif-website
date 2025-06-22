@@ -12,6 +12,8 @@
     "@marsidev/react-turnstile": "^1.1.0",
     "@supabase/ssr": "^0.6.1",
     "@supabase/supabase-js": "^2.50.0",
+    "@tanstack/react-query": "^5.81.2",
+    "@tanstack/react-query-devtools": "^5.81.2",
     "next": "15.3.3",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",

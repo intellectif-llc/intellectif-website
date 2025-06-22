@@ -84,41 +84,17 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Service not found" }, { status: 404 });
     }
 
-    // Find optimal consultant assignment using database function
-    console.log("🔧 Calling get_optimal_consultant_assignment with params:", {
+    // FIXED: Atomic booking creation with race condition protection
+    // Instead of separate availability check + booking creation, use a single atomic operation
+    console.log("🔧 Creating booking with atomic availability check:", {
       target_date: scheduledDate,
       target_time: scheduledTime,
       service_id_param: serviceId,
       assignment_strategy: assignmentStrategy || "optimal",
     });
 
-    const { data: consultantAssignment, error: consultantError } =
-      await supabase.rpc("get_optimal_consultant_assignment", {
-        target_date: scheduledDate,
-        target_time: scheduledTime,
-        service_id_param: serviceId,
-        assignment_strategy: assignmentStrategy || "optimal",
-      });
-
-    console.log("📊 Consultant assignment result:", {
-      data: consultantAssignment,
-      error: consultantError,
-      dataLength: consultantAssignment?.length || 0,
-    });
-
-    if (
-      consultantError ||
-      !consultantAssignment ||
-      consultantAssignment.length === 0
-    ) {
-      console.error("Error finding consultant:", consultantError);
-      return NextResponse.json(
-        { error: "No available consultants for the selected time slot" },
-        { status: 409 }
-      );
-    }
-
-    const consultant = consultantAssignment[0]; // Get the best assignment
+    // Create scheduled datetime
+    const scheduledDateTime = new Date(`${scheduledDate}T${scheduledTime}:00`);
 
     // Create or get customer metrics record using service role
     console.log("🔧 Creating service role client for customer metrics...");
@@ -135,52 +111,58 @@ export async function POST(request: NextRequest) {
       email: customerMetrics.email,
     });
 
-    // Create scheduled datetime
-    const scheduledDateTime = new Date(`${scheduledDate}T${scheduledTime}:00`);
-
-    // Create the booking
-    const { data: booking, error: bookingError } = await supabase
-      .from("bookings")
-      .insert({
-        service_id: serviceId,
-        scheduled_date: scheduledDate,
-        scheduled_time: scheduledTime,
-        scheduled_datetime: scheduledDateTime.toISOString(),
-        customer_metrics_id: customerMetrics.id,
-        customer_data: {
+    // FIXED: Use atomic booking creation function to prevent race conditions
+    const { data: bookingResult, error: bookingError } = await supabase.rpc(
+      "create_booking_with_availability_check",
+      {
+        service_id_param: serviceId,
+        scheduled_date_param: scheduledDate,
+        scheduled_time_param: scheduledTime,
+        scheduled_datetime_param: scheduledDateTime.toISOString(),
+        customer_metrics_id_param: customerMetrics.id,
+        customer_data_param: {
           email: customerData.email,
           first_name: customerData.firstName,
           last_name: customerData.lastName,
           phone: customerData.phone || null,
           company: customerData.company || null,
         },
-        project_description: projectDescription,
-        consultant_id: consultant.consultant_id,
-        status: service.auto_confirm ? "confirmed" : "pending",
-        payment_status: service.requires_payment ? "pending" : "waived",
-        payment_amount: service.price,
-        lead_score: calculateLeadScore(
+        project_description_param: projectDescription,
+        assignment_strategy_param: assignmentStrategy || "optimal",
+        lead_score_param: calculateLeadScore(
           service.price,
           customerData.company,
           projectDescription
         ),
-        booking_source: "website_booking",
-      })
-      .select(
-        `
-        *,
-        service:services(*)
-      `
-      )
-      .single();
+      }
+    );
 
-    if (bookingError) {
-      console.error("Error creating booking:", bookingError);
-      return NextResponse.json(
-        { error: "Failed to create booking" },
-        { status: 500 }
-      );
+    if (bookingError || !bookingResult?.success) {
+      console.error("Error creating booking atomically:", bookingError);
+      const errorMessage =
+        bookingResult?.error ||
+        bookingError?.message ||
+        "Failed to create booking";
+
+      // Return specific error codes for different failure types
+      if (
+        errorMessage.includes("No available consultants") ||
+        errorMessage.includes("time slot")
+      ) {
+        return NextResponse.json(
+          {
+            error:
+              "The selected time slot is no longer available. Please choose another time.",
+          },
+          { status: 409 }
+        );
+      }
+
+      return NextResponse.json({ error: errorMessage }, { status: 500 });
     }
+
+    const booking = bookingResult.booking;
+    const consultant = bookingResult.consultant;
 
     // Create follow-up task if required
     if (booking.follow_up_required) {

@@ -1,16 +1,11 @@
 import React, { useState, useEffect, useCallback } from "react";
-
-interface TimeSlot {
-  time: string;
-  display: string;
-  available: boolean;
-  availableSlots: number;
-  consultants: Array<{
-    id: string;
-    name: string;
-    availableSlots: number;
-  }>;
-}
+import {
+  useAvailableDates,
+  useTimeSlots,
+  usePrefetchTimeSlots,
+  TimeSlot,
+  AvailableDate,
+} from "@/hooks/useBookingData";
 
 interface DateTimeSelectionProps {
   selectedDateTime: { date: string; time: string } | null;
@@ -33,184 +28,53 @@ export default function DateTimeSelection({
   const [selectedTime, setSelectedTime] = useState(
     selectedDateTime?.time || ""
   );
-  const [timeSlots, setTimeSlots] = useState<TimeSlot[]>([]);
-  const [loading, setLoading] = useState(false);
 
-  // State for available dates from database
-  const [availableDates, setAvailableDates] = useState<
-    Array<{
-      value: string;
-      display: string;
-      fullDate: string;
-      dayOfWeek: number;
-      totalAvailableSlots: number;
-    }>
-  >([]);
-  const [datesLoading, setDatesLoading] = useState(true);
+  // Use TanStack Query hooks for data fetching
+  const {
+    data: availableDates = [],
+    isLoading: datesLoading,
+    error: datesError,
+  } = useAvailableDates(serviceId, 21);
 
-  // Fetch available dates from database
-  const fetchAvailableDates = useCallback(async () => {
-    setDatesLoading(true);
-    console.log("🔍 FRONTEND - Fetching available dates:", {
-      serviceId,
-      timestamp: new Date().toISOString(),
-    });
+  const {
+    data: timeSlotsData,
+    isLoading: loading,
+    error: slotsError,
+  } = useTimeSlots(selectedDate, serviceId);
 
-    try {
-      const params = new URLSearchParams();
-      if (serviceId) {
-        params.append("service_id", serviceId);
-      }
-      params.append("days_ahead", "21"); // Check more days to find availability
-      // Add timestamp to prevent caching
-      params.append("_t", Date.now().toString());
+  // Extract time slots and service info from the response
+  const timeSlots = timeSlotsData?.timeSlots || [];
+  const serviceInfo = timeSlotsData?.serviceInfo;
+  const serviceDuration = timeSlotsData?.serviceDuration;
 
-      const response = await fetch(`/api/availability/dates?${params}`);
-      if (response.ok) {
-        const data = await response.json();
-        console.log("📊 FRONTEND - Received dates data:", {
-          totalDates: data.availableDates?.length || 0,
-          availableDates:
-            data.availableDates?.map((d: any) => ({
-              date: d.value,
-              display: d.display,
-              slots: d.totalAvailableSlots,
-            })) || [],
-          serviceDuration: data.serviceDuration,
-          totalDatesChecked: data.totalDatesChecked,
-        });
-
-        setAvailableDates(data.availableDates || []);
-
-        console.log("✅ FRONTEND - Updated availableDates state:", {
-          count: data.availableDates?.length || 0,
-          firstDate: data.availableDates?.[0]?.value,
-          lastDate:
-            data.availableDates?.[data.availableDates.length - 1]?.value,
-        });
-      } else {
-        console.error(
-          "❌ FRONTEND - Failed to fetch available dates:",
-          response.status,
-          response.statusText
-        );
-        setAvailableDates([]);
-      }
-    } catch (error) {
-      console.error("💥 FRONTEND - Error fetching available dates:", error);
-      setAvailableDates([]);
-    } finally {
-      setDatesLoading(false);
-    }
-  }, [serviceId]);
-
-  // Fetch available dates on component mount and when service changes
-  useEffect(() => {
-    fetchAvailableDates();
-  }, [fetchAvailableDates]);
-
-  // Fetch available time slots for selected date
-  const fetchTimeSlots = useCallback(
-    async (date: string) => {
-      if (!date) return;
-
-      console.log("🔍 FRONTEND - Fetching time slots:", {
-        date,
-        serviceId,
-        timestamp: new Date().toISOString(),
+  // Debug log to verify service duration and buffer data is available
+  React.useEffect(() => {
+    if (serviceInfo && serviceDuration) {
+      console.log("🔧 Service configuration loaded:", {
+        name: serviceInfo.name,
+        baseDuration: serviceInfo.duration,
+        totalDuration: serviceInfo.totalDuration || serviceDuration,
+        bufferBefore: serviceInfo.bufferBefore,
+        bufferAfter: serviceInfo.bufferAfter,
+        calculatedTotal:
+          serviceInfo.duration +
+          serviceInfo.bufferBefore +
+          serviceInfo.bufferAfter,
       });
+    }
+  }, [serviceInfo, serviceDuration]);
 
-      setLoading(true);
-      try {
-        const params = new URLSearchParams({ date });
-        if (serviceId) {
-          params.append("service_id", serviceId);
-        }
-        // Add timestamp to prevent caching
-        params.append("_t", Date.now().toString());
+  const { prefetchTimeSlots } = usePrefetchTimeSlots();
 
-        const response = await fetch(`/api/availability/slots?${params}`);
-        if (response.ok) {
-          const data = await response.json();
-          console.log("📊 FRONTEND - Received time slots data:", {
-            date: data.date,
-            totalSlots: data.timeSlots?.length || 0,
-            timeSlots:
-              data.timeSlots?.map((t: any) => ({
-                time: t.time,
-                display: t.display,
-                availableSlots: t.availableSlots,
-                consultantCount: t.consultants?.length || 0,
-              })) || [],
-            serviceDuration: data.serviceDuration,
-            slotInterval: data.slotInterval,
-            service: data.service,
-          });
-
-          setTimeSlots(data.timeSlots || []);
-
-          console.log("✅ FRONTEND - Updated timeSlots state:", {
-            count: data.timeSlots?.length || 0,
-            firstSlot: data.timeSlots?.[0]?.time,
-            lastSlot: data.timeSlots?.[data.timeSlots?.length - 1]?.time,
-          });
-        } else {
-          console.error(
-            "❌ FRONTEND - Failed to fetch time slots:",
-            response.status,
-            response.statusText
-          );
-          setTimeSlots([]);
-        }
-      } catch (error) {
-        console.error("💥 FRONTEND - Error fetching time slots:", error);
-        setTimeSlots([]);
-      } finally {
-        setLoading(false);
+  // Throttled prefetch time slots for better UX when hovering over dates
+  const handleDateHover = useCallback(
+    (date: string) => {
+      if (date && serviceId && date !== selectedDate) {
+        prefetchTimeSlots(date, serviceId);
       }
     },
-    [serviceId]
+    [prefetchTimeSlots, serviceId, selectedDate]
   );
-
-  // Add event listeners for page focus and visibility change to refresh data
-  useEffect(() => {
-    const handleFocus = () => {
-      console.log("Page gained focus - refreshing availability data");
-      fetchAvailableDates();
-      // Also refresh time slots if a date is selected
-      if (selectedDate) {
-        fetchTimeSlots(selectedDate);
-      }
-    };
-
-    const handleVisibilityChange = () => {
-      if (!document.hidden) {
-        console.log("Page became visible - refreshing availability data");
-        fetchAvailableDates();
-        // Also refresh time slots if a date is selected
-        if (selectedDate) {
-          fetchTimeSlots(selectedDate);
-        }
-      }
-    };
-
-    // Add event listeners
-    window.addEventListener("focus", handleFocus);
-    document.addEventListener("visibilitychange", handleVisibilityChange);
-
-    // Cleanup event listeners
-    return () => {
-      window.removeEventListener("focus", handleFocus);
-      document.removeEventListener("visibilitychange", handleVisibilityChange);
-    };
-  }, [fetchAvailableDates, fetchTimeSlots, selectedDate]);
-
-  // Fetch time slots when date changes
-  useEffect(() => {
-    if (selectedDate) {
-      fetchTimeSlots(selectedDate);
-    }
-  }, [selectedDate, fetchTimeSlots]);
 
   const handleDateSelect = (date: string) => {
     setSelectedDate(date);
@@ -239,6 +103,21 @@ export default function DateTimeSelection({
           local timezone.
         </p>
       </div>
+
+      {/* Error handling */}
+      {(datesError || slotsError) && (
+        <div className="mb-8">
+          <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-4 max-w-md mx-auto">
+            <p className="text-red-400 text-center">
+              {datesError instanceof Error
+                ? datesError.message
+                : slotsError instanceof Error
+                ? slotsError.message
+                : "Failed to load availability data. Please refresh the page."}
+            </p>
+          </div>
+        </div>
+      )}
 
       <div className="grid lg:grid-cols-2 gap-12 mb-12">
         {/* Date Selection */}
@@ -315,6 +194,7 @@ export default function DateTimeSelection({
                 <button
                   key={date.value}
                   onClick={() => handleDateSelect(date.value)}
+                  onMouseEnter={() => handleDateHover(date.value)}
                   className={`
                   group relative p-4 rounded-xl text-left transition-all duration-300 ease-out hover:scale-[1.02] transform
                   ${

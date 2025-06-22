@@ -33,6 +33,7 @@ export async function GET(request: NextRequest) {
 
     let service = null;
     let serviceDuration = 60; // Default duration
+    let totalServiceDuration = 60; // Default total duration including buffer
 
     // Fetch service details if service ID is provided
     if (serviceId) {
@@ -55,31 +56,50 @@ export async function GET(request: NextRequest) {
       if (serviceData) {
         service = serviceData;
         serviceDuration = serviceData.duration_minutes;
+
+        // Calculate total duration with fallback defaults
+        const bufferBefore = serviceData.buffer_before_minutes ?? 0;
+        const bufferAfter = serviceData.buffer_after_minutes ?? 5; // Default 5min buffer
+        totalServiceDuration = serviceDuration + bufferBefore + bufferAfter;
+
         console.log("📋 Service details:", {
           serviceId,
           name: service.name,
           duration: serviceDuration,
-          bufferBefore: service.buffer_before_minutes,
-          bufferAfter: service.buffer_after_minutes,
+          bufferBefore,
+          bufferAfter,
+          totalDuration: totalServiceDuration,
+          note: "Total duration determines slot intervals",
         });
       }
     }
 
-    // Generate time slots for the date
+    // CORRECT LOGIC: Slot intervals MUST match total service duration
+    // If consultant is unavailable for 20 minutes total, slots must be 20 minutes apart
+    // This ensures no double bookings and accurate availability display
+    const slotInterval = totalServiceDuration; // Dynamic from database!
+
     const timeSlots = [];
     const startHour = 8; // 8 AM
     const endHour = 18; // 6 PM
 
-    // Use 15-minute intervals as the base for slot generation
-    // The database function will handle buffer calculations internally
-    const slotInterval = 15;
+    console.log("🔧 CORRECT Slot generation strategy:", {
+      serviceDuration,
+      totalServiceDuration,
+      slotInterval,
+      strategy: "Dynamic intervals matching actual consultant availability",
+      note: "Prevents impossible bookings during buffer time",
+      example: `Service: ${serviceDuration}min + Buffer: ${
+        totalServiceDuration - serviceDuration
+      }min = ${totalServiceDuration}min slots`,
+    });
 
-    // Generate time slots
+    // Generate time slots using dynamic intervals based on actual consultant availability
     const startTimeMinutes = startHour * 60; // 8 AM = 480 minutes
     const endTimeMinutes = endHour * 60; // 6 PM = 1080 minutes
 
     console.log(
-      `📅 Generating slots for ${date} from ${startHour}:00 to ${endHour}:00 with ${slotInterval}min intervals`
+      `📅 Generating slots for ${date} from ${startHour}:00 to ${endHour}:00 with ${slotInterval}min intervals (CORRECT: Dynamic intervals)`
     );
 
     for (
@@ -90,14 +110,20 @@ export async function GET(request: NextRequest) {
       const hour = Math.floor(totalMinutes / 60);
       const minute = totalMinutes % 60;
 
-      // Skip if we've gone past end hour
-      if (hour >= endHour) break;
+      // Skip if we've gone past end hour or if slot would extend beyond end hour
+      if (
+        hour >= endHour ||
+        totalMinutes + totalServiceDuration > endTimeMinutes
+      )
+        break;
 
       const timeString = `${hour.toString().padStart(2, "0")}:${minute
         .toString()
         .padStart(2, "0")}`;
 
-      console.log(`\n⏰ Processing time slot: ${timeString}`);
+      console.log(
+        `\n⏰ Processing time slot: ${timeString} (needs ${totalServiceDuration}min total)`
+      );
 
       try {
         // Always use buffer-aware function when service ID is provided
@@ -137,6 +163,26 @@ export async function GET(request: NextRequest) {
                 totalDuration: c.total_duration_minutes,
                 bufferBefore: c.buffer_before,
                 bufferAfter: c.buffer_after,
+                requiredStartTime: `${timeString} - ${c.buffer_before}min = ${
+                  new Date(`2000-01-01 ${timeString}`).getTime() -
+                    c.buffer_before * 60000 >=
+                  0
+                    ? new Date(
+                        new Date(`2000-01-01 ${timeString}`).getTime() -
+                          c.buffer_before * 60000
+                      )
+                        .toTimeString()
+                        .slice(0, 5)
+                    : "INVALID"
+                }`,
+                requiredEndTime: `${timeString} + ${
+                  c.total_duration_minutes
+                }min = ${new Date(
+                  new Date(`2000-01-01 ${timeString}`).getTime() +
+                    c.total_duration_minutes * 60000
+                )
+                  .toTimeString()
+                  .slice(0, 5)}`,
               }),
             })) || [],
         });
@@ -225,21 +271,24 @@ export async function GET(request: NextRequest) {
         consultantCount: t.consultants.length,
       })),
       serviceDuration,
+      totalServiceDuration,
       slotInterval,
+      fixedIssue: "Dynamic intervals matching actual consultant availability",
     });
 
     const response = NextResponse.json({
       date,
       timeSlots,
       totalSlots: timeSlots.length,
-      serviceDuration,
+      serviceDuration: totalServiceDuration, // Use total duration including buffers
       slotInterval,
       service: service
         ? {
             name: service.name,
-            duration: serviceDuration,
-            bufferBefore: service.buffer_before_minutes || 0,
-            bufferAfter: service.buffer_after_minutes || 5,
+            duration: serviceDuration, // Base service duration
+            totalDuration: totalServiceDuration, // Total including buffers
+            bufferBefore: service.buffer_before_minutes ?? 0,
+            bufferAfter: service.buffer_after_minutes ?? 5,
           }
         : null,
     });
@@ -254,12 +303,9 @@ export async function GET(request: NextRequest) {
 
     return response;
   } catch (error) {
-    console.error("💥 SLOTS API Error:", error);
+    console.error("❌ Slots API Error:", error);
     return NextResponse.json(
-      {
-        error: "Internal server error",
-        details: error instanceof Error ? error.message : "Unknown error",
-      },
+      { error: "Internal server error" },
       { status: 500 }
     );
   }

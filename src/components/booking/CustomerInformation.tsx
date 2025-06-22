@@ -3,6 +3,10 @@ import toast from "react-hot-toast";
 import { BookingData } from "@/app/booking/page";
 import Turnstile from "@/components/ui/Turnstile";
 import { useTurnstile } from "@/hooks/useTurnstile";
+import {
+  useCreateBooking,
+  useOptimisticTimeSlots,
+} from "@/hooks/useBookingData";
 
 interface CustomerData {
   firstName: string;
@@ -36,7 +40,13 @@ export default function CustomerInformation({
   });
 
   const [errors, setErrors] = useState<Partial<CustomerData>>({});
-  const [submitting, setSubmitting] = useState(false);
+
+  // TanStack Query hooks
+  const createBookingMutation = useCreateBooking();
+  const { updateTimeSlotOptimistically } = useOptimisticTimeSlots(
+    bookingData.dateTime?.date || "",
+    bookingData.service?.id
+  );
 
   // Turnstile hook
   const {
@@ -90,53 +100,58 @@ export default function CustomerInformation({
       return;
     }
 
-    setSubmitting(true);
-    try {
-      const response = await fetch("/api/bookings", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          serviceId: bookingData.service?.id,
-          scheduledDate: bookingData.dateTime?.date,
-          scheduledTime: bookingData.dateTime?.time,
-          customerData: formData,
-          projectDescription: formData.projectDescription,
-          assignmentStrategy: "optimal", // Use optimal assignment strategy
-        }),
-      });
-
-      if (response.ok) {
-        const result = await response.json();
-        toast.success("Booking confirmed successfully!");
-
-        // Show success details
-        toast.success(`Booking reference: ${result.booking.bookingReference}`, {
-          duration: 6000,
-        });
-
-        // Redirect to confirmation page or reset form
-        console.log("Booking created:", result.booking);
-
-        // Reset form after successful submission
-        setTimeout(() => {
-          window.location.href = "/"; // Or navigate to a confirmation page
-        }, 3000);
-      } else {
-        const error = await response.json();
-        toast.error(error.error || "Failed to create booking");
-      }
-    } catch (error) {
-      console.error("Booking submission error:", error);
-      toast.error("Failed to submit booking. Please try again.");
-    } finally {
-      setSubmitting(false);
+    // Optimistically update the UI (reduce available slots)
+    if (bookingData.dateTime?.time) {
+      updateTimeSlotOptimistically(bookingData.dateTime.time, true);
     }
+
+    // Use TanStack Query mutation
+    createBookingMutation.mutate(
+      {
+        serviceId: bookingData.service?.id || "",
+        scheduledDate: bookingData.dateTime?.date || "",
+        scheduledTime: bookingData.dateTime?.time || "",
+        customerData: {
+          email: formData.email,
+          firstName: formData.firstName,
+          lastName: formData.lastName,
+          phone: formData.phone,
+          company: formData.company,
+        },
+        projectDescription: formData.projectDescription,
+        assignmentStrategy: "optimal",
+      },
+      {
+        onSuccess: (result) => {
+          // Show success details
+          toast.success(
+            `Booking reference: ${result.booking.bookingReference}`,
+            {
+              duration: 6000,
+            }
+          );
+
+          console.log("Booking created:", result.booking);
+
+          // Reset form after successful submission
+          setTimeout(() => {
+            window.location.href = "/"; // Or navigate to a confirmation page
+          }, 3000);
+        },
+        onError: () => {
+          // Revert optimistic update on error
+          if (bookingData.dateTime?.time) {
+            updateTimeSlotOptimistically(bookingData.dateTime.time, false);
+          }
+        },
+      }
+    );
   };
 
   const canSubmit =
-    Object.values(formData).every((value) => value.trim() !== "") && isVerified;
+    Object.values(formData).every((value) => value.trim() !== "") &&
+    isVerified &&
+    !createBookingMutation.isPending;
 
   return (
     <div className="py-8">
@@ -487,24 +502,24 @@ export default function CustomerInformation({
 
         <button
           onClick={handleSubmit}
-          disabled={!canSubmit || submitting}
+          disabled={!canSubmit || createBookingMutation.isPending}
           className={`group relative inline-flex items-center justify-center px-10 py-4 text-lg font-bold rounded-2xl transition-all duration-500 ease-out shadow-xl focus:outline-none focus:ring-4 focus:ring-[#6bdcc0]/30 focus:ring-offset-2 focus:ring-offset-[#051028] transform overflow-hidden backdrop-blur-sm ${
-            canSubmit && !submitting
+            canSubmit && !createBookingMutation.isPending
               ? "hover:scale-[1.02] hover:-translate-y-2"
               : "opacity-50 cursor-not-allowed"
           }`}
           style={{
             background:
-              canSubmit && !submitting
+              canSubmit && !createBookingMutation.isPending
                 ? "linear-gradient(135deg, #6bdcc0 0%, #22d3ee 50%, #0ea5e9 100%)"
                 : "rgba(100, 116, 139, 0.5)",
             boxShadow:
-              canSubmit && !submitting
+              canSubmit && !createBookingMutation.isPending
                 ? "0 8px 32px rgba(107, 220, 192, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.2)"
                 : "0 4px 16px rgba(100, 116, 139, 0.2)",
           }}
         >
-          {submitting ? (
+          {createBookingMutation.isPending ? (
             <>
               <svg
                 className="animate-spin -ml-1 mr-3 h-5 w-5 text-[#051028]"

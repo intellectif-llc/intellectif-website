@@ -3,6 +3,7 @@ import { Toaster } from "react-hot-toast";
 import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
 import { AuthProvider } from "@/contexts/AuthContext";
+import QueryProvider from "@/components/providers/QueryProvider";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -44,41 +45,43 @@ export default function RootLayout({
         <link rel="shortcut icon" href="/favicon.ico" type="image/x-icon" />
       </head>
       <body>
-        <AuthProvider>
-          <Header />
-          <main className="relative">{children}</main>
-          <Footer />
-          <Toaster
-            position="top-right"
-            toastOptions={{
-              duration: 4000,
-              style: {
-                background: "#1e293b",
-                color: "#fff",
-                border: "1px solid #6bdcc0",
-                borderRadius: "12px",
-              },
-              success: {
-                iconTheme: {
-                  primary: "#6bdcc0",
-                  secondary: "#fff",
+        <QueryProvider>
+          <AuthProvider>
+            <Header />
+            <main className="relative">{children}</main>
+            <Footer />
+            <Toaster
+              position="top-right"
+              toastOptions={{
+                duration: 4000,
+                style: {
+                  background: "#1e293b",
+                  color: "#fff",
+                  border: "1px solid #6bdcc0",
+                  borderRadius: "12px",
                 },
-              },
-              error: {
-                iconTheme: {
-                  primary: "#ef4444",
-                  secondary: "#fff",
+                success: {
+                  iconTheme: {
+                    primary: "#6bdcc0",
+                    secondary: "#fff",
+                  },
                 },
-              },
-              loading: {
-                iconTheme: {
-                  primary: "#6bdcc0",
-                  secondary: "#fff",
+                error: {
+                  iconTheme: {
+                    primary: "#ef4444",
+                    secondary: "#fff",
+                  },
                 },
-              },
-            }}
-          />
-        </AuthProvider>
+                loading: {
+                  iconTheme: {
+                    primary: "#6bdcc0",
+                    secondary: "#fff",
+                  },
+                },
+              }}
+            />
+          </AuthProvider>
+        </QueryProvider>
       </body>
     </html>
   );

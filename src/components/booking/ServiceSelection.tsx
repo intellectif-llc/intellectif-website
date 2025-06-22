@@ -1,15 +1,5 @@
-import React, { useState, useEffect } from "react";
-
-interface Service {
-  id: string;
-  name: string;
-  price: number;
-  duration: number;
-  description: string;
-  features: string[];
-  popular?: boolean;
-  slug: string;
-}
+import React from "react";
+import { useServices, Service } from "@/hooks/useBookingData";
 
 interface ServiceSelectionProps {
   selectedService: Service | null;
@@ -22,33 +12,7 @@ export default function ServiceSelection({
   onServiceSelect,
   onNext,
 }: ServiceSelectionProps) {
-  const [services, setServices] = useState<Service[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  // Fetch services from database
-  useEffect(() => {
-    const fetchServices = async () => {
-      try {
-        setLoading(true);
-        const response = await fetch("/api/services");
-
-        if (!response.ok) {
-          throw new Error("Failed to fetch services");
-        }
-
-        const data = await response.json();
-        setServices(data.services || []);
-      } catch (err) {
-        console.error("Error fetching services:", err);
-        setError("Failed to load services. Please refresh the page.");
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchServices();
-  }, []);
+  const { data: services = [], isLoading: loading, error } = useServices();
 
   const handleServiceSelect = (service: Service) => {
     onServiceSelect(service);
@@ -80,7 +44,11 @@ export default function ServiceSelection({
             Choose Your Consultation Type
           </h2>
           <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-4 max-w-md mx-auto">
-            <p className="text-red-400">{error}</p>
+            <p className="text-red-400">
+              {error instanceof Error
+                ? error.message
+                : "Failed to load services. Please refresh the page."}
+            </p>
           </div>
         </div>
       </div>
