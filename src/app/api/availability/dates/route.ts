@@ -23,14 +23,18 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // Generate date range to check
+    // Generate date range to check (timezone-safe)
     const availableDates = [];
     const today = new Date();
     const currentDate = new Date(today);
     currentDate.setDate(currentDate.getDate() + 1); // Start from tomorrow
 
     for (let i = 0; i < daysAhead; i++) {
-      const dateString = currentDate.toISOString().split("T")[0];
+      // Generate date string in local timezone to avoid UTC conversion issues
+      const year = currentDate.getFullYear();
+      const month = String(currentDate.getMonth() + 1).padStart(2, "0");
+      const day = String(currentDate.getDate()).padStart(2, "0");
+      const dateString = `${year}-${month}-${day}`;
 
       try {
         // Check if there are any available consultants for this date

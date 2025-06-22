@@ -167,8 +167,9 @@ export default function TimeOffManager() {
   };
 
   const formatDateRange = (startDate: string, endDate: string) => {
-    const start = new Date(startDate);
-    const end = new Date(endDate);
+    // Parse dates as local dates to avoid timezone shifting
+    const start = new Date(startDate + "T00:00:00");
+    const end = new Date(endDate + "T00:00:00");
 
     if (startDate === endDate) {
       return start.toLocaleDateString();

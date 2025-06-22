@@ -404,15 +404,14 @@ export default function CustomerInformation({
               <div className="space-y-2">
                 <p className="text-[#64748b]">
                   {bookingData.dateTime?.date &&
-                    new Date(bookingData.dateTime.date).toLocaleDateString(
-                      "en-US",
-                      {
-                        weekday: "long",
-                        month: "long",
-                        day: "numeric",
-                        year: "numeric",
-                      }
-                    )}
+                    new Date(
+                      bookingData.dateTime.date + "T00:00:00"
+                    ).toLocaleDateString("en-US", {
+                      weekday: "long",
+                      month: "long",
+                      day: "numeric",
+                      year: "numeric",
+                    })}
                 </p>
                 <p className="text-white font-semibold">
                   {bookingData.dateTime?.time &&

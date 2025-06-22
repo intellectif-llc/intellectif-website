@@ -20,6 +20,20 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Development bypass - remove in production
+    if (
+      process.env.NODE_ENV === "development" &&
+      process.env.BYPASS_TURNSTILE === "true"
+    ) {
+      console.log("BYPASSING Turnstile verification in development");
+      return NextResponse.json({
+        success: true,
+        challengeTs: new Date().toISOString(),
+        hostname: "localhost",
+        bypass: true,
+      });
+    }
+
     if (!process.env.TURNSTILE_SECRET_KEY) {
       console.error("TURNSTILE_SECRET_KEY is not configured");
       return NextResponse.json(
@@ -45,12 +59,13 @@ export async function POST(request: NextRequest) {
     const idempotencyKey = crypto.randomUUID();
     formData.append("idempotency_key", idempotencyKey);
 
-    // Validate with Cloudflare
+    // Validate with Cloudflare with timeout and retry
     const response = await fetch(
       "https://challenges.cloudflare.com/turnstile/v0/siteverify",
       {
         method: "POST",
         body: formData,
+        signal: AbortSignal.timeout(15000), // 15 second timeout
       }
     );
 
@@ -86,6 +101,19 @@ export async function POST(request: NextRequest) {
     });
   } catch (error) {
     console.error("Turnstile verification error:", error);
+
+    // Handle network timeout specifically
+    if (error instanceof Error && error.message.includes("timeout")) {
+      console.error("Network timeout connecting to Cloudflare Turnstile");
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Verification service temporarily unavailable",
+        },
+        { status: 503 }
+      );
+    }
+
     return NextResponse.json(
       { success: false, error: "Internal server error" },
       { status: 500 }
