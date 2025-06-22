@@ -7,6 +7,10 @@ import "react-international-phone/style.css";
 import { useAuth } from "@/contexts/AuthContext";
 import { createClientComponentClient } from "@/lib/supabase";
 import Button from "@/components/ui/Button";
+import {
+  TIMEZONES_BY_REGION,
+  getTimezoneWithFallback,
+} from "@/constants/timezones";
 
 export default function ProfilePage() {
   const [firstName, setFirstName] = useState("");
@@ -44,10 +48,7 @@ export default function ProfilePage() {
               setFirstName(profileData.first_name || "");
               setLastName(profileData.last_name || "");
               setCompany(profileData.company || "");
-              setTimezone(
-                profileData.timezone ||
-                  Intl.DateTimeFormat().resolvedOptions().timeZone
-              );
+              setTimezone(getTimezoneWithFallback(profileData.timezone));
             } else {
               // Fallback to auth.users metadata
               const [firstName, ...lastNameParts] = (
@@ -57,8 +58,7 @@ export default function ProfilePage() {
               setLastName(lastNameParts.join(" ") || "");
               setCompany(user.user_metadata?.company || "");
               setTimezone(
-                user.user_metadata?.timezone ||
-                  Intl.DateTimeFormat().resolvedOptions().timeZone
+                getTimezoneWithFallback(user.user_metadata?.timezone)
               );
             }
 
@@ -74,10 +74,7 @@ export default function ProfilePage() {
             setLastName(lastNameParts.join(" ") || "");
             setPhone(user.user_metadata?.phone || "");
             setCompany(user.user_metadata?.company || "");
-            setTimezone(
-              user.user_metadata?.timezone ||
-                Intl.DateTimeFormat().resolvedOptions().timeZone
-            );
+            setTimezone(getTimezoneWithFallback(user.user_metadata?.timezone));
           }
         }
       }
@@ -374,22 +371,17 @@ export default function ProfilePage() {
                     transition-all duration-300
                   "
                 >
-                  <option value="America/New_York">Eastern Time (EST)</option>
-                  <option value="America/Chicago">Central Time (CST)</option>
-                  <option value="America/Denver">Mountain Time (MST)</option>
-                  <option value="America/Los_Angeles">
-                    Pacific Time (PST)
-                  </option>
-                  <option value="America/Phoenix">Arizona Time (MST)</option>
-                  <option value="America/Anchorage">Alaska Time (AKST)</option>
-                  <option value="Pacific/Honolulu">Hawaii Time (HST)</option>
-                  <option value="Europe/London">London (GMT)</option>
-                  <option value="Europe/Paris">Paris (CET)</option>
-                  <option value="Europe/Berlin">Berlin (CET)</option>
-                  <option value="Asia/Tokyo">Tokyo (JST)</option>
-                  <option value="Asia/Shanghai">Shanghai (CST)</option>
-                  <option value="Asia/Kolkata">Mumbai (IST)</option>
-                  <option value="Australia/Sydney">Sydney (AEDT)</option>
+                  {Object.entries(TIMEZONES_BY_REGION).map(
+                    ([region, timezones]) => (
+                      <optgroup key={region} label={region}>
+                        {timezones.map((tz) => (
+                          <option key={tz.value} value={tz.value}>
+                            {tz.label} {tz.offset && `(${tz.offset})`}
+                          </option>
+                        ))}
+                      </optgroup>
+                    )
+                  )}
                 </select>
                 <p className="text-xs text-gray-400 mt-1">
                   Used for scheduling meetings and notifications

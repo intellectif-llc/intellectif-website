@@ -211,6 +211,8 @@ export async function GET(request: NextRequest) {
 
     const bookingId = searchParams.get("id");
     const customerEmail = searchParams.get("customer_email");
+    const consultantId = searchParams.get("consultant_id");
+    const unassigned = searchParams.get("unassigned");
 
     if (bookingId) {
       // For single booking access, check staff status with auth client
@@ -267,7 +269,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ booking });
     }
 
-    // List bookings (staff only)
+    // List bookings with role-based access control
     console.log("🔍 Checking staff status for user:", user?.id);
     const staffStatus = user ? await isStaff(authSupabase, user.id) : false;
     console.log("📊 Staff check result:", {
@@ -275,51 +277,65 @@ export async function GET(request: NextRequest) {
       isStaff: staffStatus,
     });
 
-    if (!user || !staffStatus) {
-      console.log("❌ Access denied - user not staff");
+    if (!user) {
+      console.log("❌ Access denied - no user");
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    console.log(
-      "✅ User authorized, using service role client for bookings..."
-    );
-
-    // Use service role client for staff operations
+    // Use service role client for all booking queries
     const serviceSupabase = createServiceRoleClient();
 
-    // First, let's check if there are any bookings at all
-    const { data: bookingCount, error: countError } = await serviceSupabase
-      .from("bookings")
-      .select("id", { count: "exact", head: true });
-
-    console.log("📊 Booking count check:", {
-      count: bookingCount,
-      error: countError,
-    });
-
-    // Try a simple query first
-    const { data: simpleBookings, error: simpleError } = await serviceSupabase
+    // Build query based on user permissions and filters
+    // Start with basic bookings query to avoid join issues
+    let query = serviceSupabase
       .from("bookings")
       .select("*")
-      .limit(5);
+      .order("created_at", { ascending: false });
 
-    console.log("📊 Simple bookings query:", {
-      found: simpleBookings?.length || 0,
-      error: simpleError,
-      sample: simpleBookings?.[0],
+    if (staffStatus) {
+      // Staff users: Apply filters based on query parameters
+      console.log("✅ Staff user - applying filters:", {
+        consultantId,
+        unassigned,
+      });
+
+      if (consultantId) {
+        // Filter by specific consultant
+        query = query.eq("consultant_id", consultantId);
+        console.log("🔍 Filtering by consultant_id:", consultantId);
+      } else if (unassigned === "true") {
+        // Filter for unassigned bookings
+        query = query.is("consultant_id", null);
+        console.log("🔍 Filtering for unassigned bookings");
+      }
+      // If no filters, staff sees all bookings (default behavior)
+    } else {
+      // Non-staff users: Only see their own assigned bookings
+      console.log("👤 Non-staff user - filtering to own bookings only");
+      query = query.eq("consultant_id", user.id);
+    }
+
+    // Execute the query
+    console.log("🔍 About to execute query for user:", {
+      userId: user.id,
+      isStaff: staffStatus,
+      filters: { consultantId, unassigned },
     });
 
-    // Now try with services join
-    const { data: bookings, error } = await serviceSupabase
-      .from("bookings")
-      .select(
-        `
-        *,
-        service:services(name, duration_minutes)
-      `
-      )
-      .order("created_at", { ascending: false })
-      .limit(50);
+    const { data: bookings, error } = await query.limit(100);
+
+    console.log("📊 Query execution result:", {
+      success: !error,
+      bookingsCount: bookings?.length || 0,
+      error: error
+        ? {
+            code: error.code,
+            message: error.message,
+            details: error.details,
+            hint: error.hint,
+          }
+        : null,
+    });
 
     if (error) {
       console.error("❌ Supabase error fetching bookings:", {
@@ -330,12 +346,102 @@ export async function GET(request: NextRequest) {
         hint: error.hint,
       });
       return NextResponse.json(
-        { error: "Failed to fetch bookings" },
+        {
+          error: "Failed to fetch bookings",
+          details: error.message || "Unknown database error",
+          code: error.code || "UNKNOWN_ERROR",
+        },
         { status: 500 }
       );
     }
 
-    return NextResponse.json({ bookings });
+    console.log("✅ Successfully fetched bookings:", {
+      count: bookings?.length || 0,
+      filters: { consultantId, unassigned },
+      userRole: staffStatus ? "staff" : "consultant",
+      sampleBooking: bookings?.[0]
+        ? {
+            id: bookings[0].id,
+            booking_reference: bookings[0].booking_reference,
+            consultant_id: bookings[0].consultant_id,
+            status: bookings[0].status,
+            customer_data: bookings[0].customer_data, // Debug customer data
+          }
+        : null,
+    });
+
+    // Enrich bookings with service and consultant data
+    const enrichedBookings = await Promise.all(
+      (bookings || []).map(async (booking) => {
+        try {
+          console.log("🔍 Processing booking:", {
+            id: booking.id,
+            original_customer_data: booking.customer_data,
+            consultant_id: booking.consultant_id,
+          });
+
+          // Get service data
+          const { data: service } = await serviceSupabase
+            .from("services")
+            .select("name, duration_minutes")
+            .eq("id", booking.service_id)
+            .single();
+
+          // Get consultant data if assigned
+          let consultant = null;
+          if (booking.consultant_id) {
+            const { data: consultantData } = await serviceSupabase
+              .from("profiles")
+              .select("first_name, last_name")
+              .eq("id", booking.consultant_id)
+              .single();
+            consultant = consultantData;
+            console.log("👤 Consultant data fetched:", consultant);
+          }
+
+          const transformedCustomerData = {
+            email: booking.customer_data?.email || "",
+            firstName: booking.customer_data?.first_name || "",
+            lastName: booking.customer_data?.last_name || "",
+            phone: booking.customer_data?.phone || "",
+            company: booking.customer_data?.company || "",
+          };
+
+          console.log("🔄 Transformed customer data:", {
+            original: booking.customer_data,
+            transformed: transformedCustomerData,
+          });
+
+          return {
+            ...booking,
+            // Transform customer_data from snake_case to camelCase for frontend
+            customer_data: transformedCustomerData,
+            service: service || {
+              name: "Unknown Service",
+              duration_minutes: 0,
+            },
+            consultant: consultant,
+          };
+        } catch (enrichError) {
+          console.error("Error enriching booking:", enrichError);
+          return {
+            ...booking,
+            // Transform customer_data from snake_case to camelCase for frontend
+            customer_data: {
+              email: booking.customer_data?.email || "",
+              firstName: booking.customer_data?.first_name || "",
+              lastName: booking.customer_data?.last_name || "",
+              phone: booking.customer_data?.phone || "",
+              company: booking.customer_data?.company || "",
+            },
+            service: { name: "Unknown Service", duration_minutes: 0 },
+            consultant: null,
+          };
+        }
+      })
+    );
+
+    return NextResponse.json({ bookings: enrichedBookings });
   } catch (error) {
     console.error("❌ Booking GET API Error:", error);
     return NextResponse.json(

@@ -152,6 +152,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           last_name: lastName,
           company: profileData.company,
           phone: profileData.phone, // Store phone in metadata instead of auth.users.phone
+          timezone: profileData.timezone, // Store timezone in metadata for consistency
         },
       });
 
