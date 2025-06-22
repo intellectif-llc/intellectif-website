@@ -180,6 +180,11 @@ CREATE TABLE services (
   duration_minutes SMALLINT NOT NULL,
   booking_type service_booking_type NOT NULL DEFAULT 'scheduled',
 
+  -- Buffer time management (added to match actual schema)
+  buffer_before_minutes SMALLINT DEFAULT 0 CHECK (buffer_before_minutes >= 0),
+  buffer_after_minutes SMALLINT DEFAULT 5 CHECK (buffer_after_minutes >= 0),
+  allow_custom_buffer BOOLEAN DEFAULT TRUE,
+
   -- Capacity management
   max_daily_bookings SMALLINT,
   max_concurrent_bookings SMALLINT DEFAULT 1,
@@ -461,15 +466,32 @@ CREATE TABLE availability_template_set_items (
 CREATE TYPE break_type_enum AS ENUM ('break', 'lunch', 'meeting', 'buffer', 'personal');
 CREATE TYPE timeoff_type_enum AS ENUM ('vacation', 'sick', 'personal', 'conference', 'training', 'holiday');
 
+-- 6. Consultant buffer preferences (per service customization)
+CREATE TABLE consultant_buffer_preferences (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  consultant_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  service_id UUID NOT NULL REFERENCES services(id) ON DELETE CASCADE,
+  buffer_before_minutes SMALLINT NOT NULL DEFAULT 0 CHECK (buffer_before_minutes >= 0),
+  buffer_after_minutes SMALLINT NOT NULL DEFAULT 5 CHECK (buffer_after_minutes >= 0),
+  notes TEXT,
+  is_active BOOLEAN NOT NULL DEFAULT TRUE,
+
+  created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+
+  CONSTRAINT uq_consultant_buffer_preferences_consultant_service UNIQUE (consultant_id, service_id)
+);
+
 -- Indexes for performance
 CREATE INDEX idx_availability_templates_consultant_day ON availability_templates(consultant_id, day_of_week) WHERE is_active = TRUE;
 CREATE INDEX idx_availability_breaks_consultant_day ON availability_breaks(consultant_id, day_of_week) WHERE is_active = TRUE;
 CREATE INDEX idx_availability_timeoff_consultant_dates ON availability_timeoff(consultant_id, start_date, end_date);
 CREATE INDEX idx_availability_timeoff_date_range ON availability_timeoff(start_date, end_date);
 CREATE INDEX idx_availability_overrides_consultant_date ON availability_overrides(consultant_id, specific_date);
+CREATE INDEX idx_consultant_buffer_preferences_consultant ON consultant_buffer_preferences(consultant_id) WHERE is_active = TRUE;
 ```
 
-### 6. Follow-up System (Optimized)
+### 7. Follow-up System (Optimized)
 
 ```sql
 CREATE TABLE follow_ups (
@@ -512,7 +534,7 @@ CREATE TYPE follow_up_status AS ENUM (
 CREATE TYPE priority_level AS ENUM ('low', 'medium', 'high', 'urgent');
 ```
 
-### 7. Business Intelligence & Analytics (Optimized)
+### 8. Business Intelligence & Analytics (Optimized)
 
 ```sql
 -- Track customer interactions and journey
@@ -567,7 +589,7 @@ CREATE TYPE project_status AS ENUM (
 );
 ```
 
-### 8. Audit Trail System
+### 9. Audit Trail System
 
 ```sql
 -- Basic audit trail for critical operations
@@ -620,7 +642,7 @@ CREATE INDEX idx_audit_log_table_record ON audit_log(table_name, record_id);
 CREATE INDEX idx_audit_log_changed_at ON audit_log(changed_at DESC);
 ```
 
-### 9. ElevenLabs Integration Support
+### 10. ElevenLabs Integration Support
 
 ```sql
 -- For future voice consultation feature
@@ -680,6 +702,7 @@ CREATE INDEX idx_voice_consultations_session ON voice_consultations(voice_sessio
 -- Availability indexes
 CREATE INDEX idx_availability_templates_consultant_day ON availability_templates(consultant_id, day_of_week) WHERE is_active = TRUE;
 CREATE INDEX idx_availability_overrides_consultant_date ON availability_overrides(consultant_id, specific_date);
+CREATE INDEX idx_consultant_buffer_preferences_consultant ON consultant_buffer_preferences(consultant_id) WHERE is_active = TRUE;
 ```
 
 ## Row Level Security (RLS) Policies
@@ -1359,8 +1382,8 @@ All issues identified in the senior developer audit have been **successfully res
 
 ### 📊 Schema Statistics
 
-- **Total Tables**: 12 (including audit_log)
-- **Total Indexes**: 18 (optimized for performance)
+- **Total Tables**: 13 (including audit_log and consultant_buffer_preferences)
+- **Total Indexes**: 19 (optimized for performance)
 - **Total Functions**: 8 (business logic automation)
 - **Total Triggers**: 5 (data consistency & automation)
 - **Total Constraints**: 25+ (data integrity)
@@ -1643,3 +1666,102 @@ deleted_at timestamp with time zone,
 is_anonymous boolean NOT NULL DEFAULT false,
 CONSTRAINT users_pkey PRIMARY KEY (id)
 );
+
+## Enums
+
+| enum_name            | enum_value             |
+| -------------------- | ---------------------- |
+| audit_operation      | INSERT                 |
+| audit_operation      | UPDATE                 |
+| audit_operation      | DELETE                 |
+| booking_status       | pending                |
+| booking_status       | confirmed              |
+| booking_status       | in_progress            |
+| booking_status       | completed              |
+| booking_status       | cancelled              |
+| booking_status       | no_show                |
+| booking_status       | rescheduled            |
+| break_type_enum      | break                  |
+| break_type_enum      | lunch                  |
+| break_type_enum      | meeting                |
+| break_type_enum      | buffer                 |
+| break_type_enum      | personal               |
+| contact_method       | email                  |
+| contact_method       | phone                  |
+| contact_method       | both                   |
+| conversion_potential | unknown                |
+| conversion_potential | low                    |
+| conversion_potential | medium                 |
+| conversion_potential | high                   |
+| conversion_potential | converted              |
+| customer_status      | prospect               |
+| customer_status      | active                 |
+| customer_status      | inactive               |
+| customer_status      | churned                |
+| customer_status      | vip                    |
+| follow_up_status     | pending                |
+| follow_up_status     | in_progress            |
+| follow_up_status     | completed              |
+| follow_up_status     | cancelled              |
+| follow_up_status     | failed                 |
+| follow_up_status     | overdue                |
+| follow_up_type       | email                  |
+| follow_up_type       | phone_call             |
+| follow_up_type       | proposal_send          |
+| follow_up_type       | contract_discussion    |
+| follow_up_type       | project_kickoff        |
+| follow_up_type       | check_in               |
+| follow_up_type       | upsell                 |
+| follow_up_type       | feedback_request       |
+| interaction_type     | booking_created        |
+| interaction_type     | consultation_completed |
+| interaction_type     | proposal_sent          |
+| interaction_type     | contract_signed        |
+| interaction_type     | project_started        |
+| interaction_type     | project_completed      |
+| interaction_type     | referral_made          |
+| interaction_type     | review_left            |
+| interaction_type     | complaint_filed        |
+| lead_quality_enum    | unqualified            |
+| lead_quality_enum    | qualified              |
+| lead_quality_enum    | hot                    |
+| lead_quality_enum    | converted              |
+| lead_quality_enum    | churned                |
+| lead_source_enum     | website_booking        |
+| lead_source_enum     | referral               |
+| lead_source_enum     | social_media           |
+| lead_source_enum     | google_ads             |
+| lead_source_enum     | linkedin               |
+| lead_source_enum     | email_campaign         |
+| lead_source_enum     | cold_outreach          |
+| lead_source_enum     | partnership            |
+| payment_status       | pending                |
+| payment_status       | processing             |
+| payment_status       | paid                   |
+| payment_status       | failed                 |
+| payment_status       | refunded               |
+| payment_status       | waived                 |
+| priority_level       | low                    |
+| priority_level       | medium                 |
+| priority_level       | high                   |
+| priority_level       | urgent                 |
+| project_status       | lead                   |
+| project_status       | qualified              |
+| project_status       | proposal_sent          |
+| project_status       | negotiation            |
+| project_status       | signed                 |
+| project_status       | in_progress            |
+| project_status       | completed              |
+| project_status       | cancelled              |
+| service_booking_type | scheduled              |
+| service_booking_type | immediate              |
+| timeoff_type_enum    | vacation               |
+| timeoff_type_enum    | sick                   |
+| timeoff_type_enum    | personal               |
+| timeoff_type_enum    | conference             |
+| timeoff_type_enum    | training               |
+| timeoff_type_enum    | holiday                |
+| user_role            | customer               |
+| user_role            | admin                  |
+| user_role            | consultant             |
+| user_role            | sales                  |
