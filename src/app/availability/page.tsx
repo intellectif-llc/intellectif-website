@@ -7,6 +7,7 @@ import Button from "@/components/ui/Button";
 import WeeklyAvailability from "@/components/availability/WeeklyAvailability";
 import BreakManager from "@/components/availability/BreakManager";
 import TimeOffManager from "@/components/availability/TimeOffManager";
+import BufferTimeManager from "@/components/availability/BufferTimeManager";
 
 interface Tab {
   id: string;
@@ -18,6 +19,7 @@ const tabs: Tab[] = [
   { id: "weekly", label: "Weekly Schedule", icon: "📅" },
   { id: "breaks", label: "Breaks", icon: "☕" },
   { id: "timeoff", label: "Time Off", icon: "🏖️" },
+  { id: "buffer", label: "Buffer Times", icon: "⏱️" },
 ];
 
 export default function AvailabilityPage() {
@@ -77,6 +79,8 @@ export default function AvailabilityPage() {
         return <BreakManager />;
       case "timeoff":
         return <TimeOffManager />;
+      case "buffer":
+        return <BufferTimeManager consultantId={user!.id} />;
       default:
         return <WeeklyAvailability />;
     }

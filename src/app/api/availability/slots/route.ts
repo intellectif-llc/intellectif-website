@@ -9,6 +9,12 @@ export async function GET(request: NextRequest) {
     const date = searchParams.get("date");
     const serviceId = searchParams.get("service_id");
 
+    console.log("🔍 SLOTS API - Request params:", {
+      date,
+      serviceId,
+      timestamp: new Date().toISOString(),
+    });
+
     if (!date) {
       return NextResponse.json(
         { error: "Date parameter is required" },
@@ -17,18 +23,18 @@ export async function GET(request: NextRequest) {
     }
 
     // Validate date format
-    const targetDate = new Date(date);
-    if (isNaN(targetDate.getTime())) {
+    const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+    if (!dateRegex.test(date)) {
       return NextResponse.json(
-        { error: "Invalid date format" },
+        { error: "Invalid date format. Use YYYY-MM-DD" },
         { status: 400 }
       );
     }
 
-    // Get service details if provided
-    let serviceDuration = 60; // Default 60 minutes
     let service = null;
+    let serviceDuration = 60; // Default duration
 
+    // Fetch service details if service ID is provided
     if (serviceId) {
       const { data: serviceData, error: serviceError } = await supabase
         .from("services")
@@ -39,7 +45,7 @@ export async function GET(request: NextRequest) {
         .single();
 
       if (serviceError) {
-        console.error("Error fetching service:", serviceError);
+        console.error("❌ Error fetching service:", serviceError);
         return NextResponse.json(
           { error: "Service not found" },
           { status: 404 }
@@ -49,6 +55,13 @@ export async function GET(request: NextRequest) {
       if (serviceData) {
         service = serviceData;
         serviceDuration = serviceData.duration_minutes;
+        console.log("📋 Service details:", {
+          serviceId,
+          name: service.name,
+          duration: serviceDuration,
+          bufferBefore: service.buffer_before_minutes,
+          bufferAfter: service.buffer_after_minutes,
+        });
       }
     }
 
@@ -57,37 +70,16 @@ export async function GET(request: NextRequest) {
     const startHour = 8; // 8 AM
     const endHour = 18; // 6 PM
 
-    // Calculate TRULY dynamic slot interval based on service + buffer
-    let slotInterval = serviceDuration; // Default to service duration
+    // Use 15-minute intervals as the base for slot generation
+    // The database function will handle buffer calculations internally
+    const slotInterval = 15;
 
-    if (service) {
-      // Calculate the ACTUAL total time needed per booking slot
-      const bufferBefore = service.buffer_before_minutes || 0;
-      const bufferAfter = service.buffer_after_minutes || 0;
-      const totalTimeNeeded = serviceDuration + bufferBefore + bufferAfter;
-
-      // This is the key: the interval should be the total time needed
-      // 15min meeting + 5min buffer = 20min intervals
-      // 55min meeting + 5min buffer = 60min intervals
-      slotInterval = totalTimeNeeded;
-
-      // Round to nearest 5 minutes for clean time slots
-      slotInterval = Math.ceil(slotInterval / 5) * 5;
-
-      console.log(
-        `🔧 Service: ${service.name}, Duration: ${serviceDuration}min, Buffer: ${bufferBefore}+${bufferAfter}min, Total: ${totalTimeNeeded}min, Interval: ${slotInterval}min`
-      );
-    } else {
-      // Fallback: minimum 15 minutes for services without buffer info
-      slotInterval = Math.max(15, serviceDuration);
-    }
-
-    // Generate time slots properly considering cross-hour intervals
+    // Generate time slots
     const startTimeMinutes = startHour * 60; // 8 AM = 480 minutes
     const endTimeMinutes = endHour * 60; // 6 PM = 1080 minutes
 
     console.log(
-      `📅 Generating slots from ${startHour}:00 to ${endHour}:00 with ${slotInterval}min intervals`
+      `📅 Generating slots for ${date} from ${startHour}:00 to ${endHour}:00 with ${slotInterval}min intervals`
     );
 
     for (
@@ -105,8 +97,11 @@ export async function GET(request: NextRequest) {
         .toString()
         .padStart(2, "0")}`;
 
+      console.log(`\n⏰ Processing time slot: ${timeString}`);
+
       try {
-        // Use buffer-aware function if service ID is provided, otherwise use standard function
+        // Always use buffer-aware function when service ID is provided
+        // This ensures proper buffer time calculations from database
         const { data: consultants, error } = serviceId
           ? await supabase.rpc("get_available_consultants_with_buffer", {
               target_date: date,
@@ -120,9 +115,31 @@ export async function GET(request: NextRequest) {
             });
 
         if (error) {
-          console.error(`Error getting consultants for ${timeString}:`, error);
+          console.error(
+            `❌ Error getting consultants for ${timeString}:`,
+            error
+          );
           continue;
         }
+
+        console.log(`📊 Raw consultant data for ${timeString}:`, {
+          consultantCount: consultants?.length || 0,
+          consultants:
+            consultants?.map((c: any) => ({
+              id: c.consultant_id,
+              name: c.consultant_name,
+              availableSlots: c.available_slots,
+              currentBookings: c.current_bookings,
+              availableStart: c.available_start,
+              availableEnd: c.available_end,
+              maxBookings: c.max_bookings,
+              ...(serviceId && {
+                totalDuration: c.total_duration_minutes,
+                bufferBefore: c.buffer_before,
+                bufferAfter: c.buffer_after,
+              }),
+            })) || [],
+        });
 
         if (
           consultants &&
@@ -140,8 +157,13 @@ export async function GET(request: NextRequest) {
             0
           );
 
+          console.log(`📈 Calculated availability for ${timeString}:`, {
+            totalAvailableSlots,
+            hasAvailability: totalAvailableSlots > 0,
+          });
+
           if (totalAvailableSlots > 0) {
-            timeSlots.push({
+            const timeSlotData = {
               time: timeString,
               display: formatTimeDisplay(timeString),
               available: true,
@@ -169,50 +191,70 @@ export async function GET(request: NextRequest) {
                   };
                 }
               ),
+            };
+
+            timeSlots.push(timeSlotData);
+            console.log(`✅ Added time slot to available list:`, {
+              time: timeString,
+              display: timeSlotData.display,
+              availableSlots: totalAvailableSlots,
+              consultantCount: consultants.length,
             });
+          } else {
+            console.log(`❌ Time slot ${timeString} has no available slots`);
           }
+        } else {
+          console.log(`❌ No consultants returned for ${timeString}`);
         }
       } catch (slotError) {
-        console.error(`Error processing time slot ${timeString}:`, slotError);
+        console.error(
+          `💥 Error processing time slot ${timeString}:`,
+          slotError
+        );
         continue;
       }
     }
 
-    return NextResponse.json({
+    console.log("\n🎯 FINAL TIME SLOTS RESULTS:", {
+      date,
+      totalAvailableSlots: timeSlots.length,
+      timeSlots: timeSlots.map((t) => ({
+        time: t.time,
+        display: t.display,
+        availableSlots: t.availableSlots,
+        consultantCount: t.consultants.length,
+      })),
+      serviceDuration,
+      slotInterval,
+    });
+
+    const response = NextResponse.json({
       date,
       timeSlots,
       totalSlots: timeSlots.length,
       serviceDuration,
-      slotInterval, // Include the calculated interval for debugging
+      slotInterval,
       service: service
         ? {
             name: service.name,
             duration: serviceDuration,
             bufferBefore: service.buffer_before_minutes || 0,
             bufferAfter: service.buffer_after_minutes || 5,
-            totalTimeNeeded:
-              serviceDuration +
-              (service.buffer_before_minutes || 0) +
-              (service.buffer_after_minutes || 0),
           }
         : null,
-      debug: {
-        intervalCalculation: service
-          ? {
-              serviceDuration,
-              bufferBefore: service.buffer_before_minutes || 0,
-              bufferAfter: service.buffer_after_minutes || 0,
-              totalTimeNeeded:
-                serviceDuration +
-                (service.buffer_before_minutes || 0) +
-                (service.buffer_after_minutes || 0),
-              finalInterval: slotInterval,
-            }
-          : null,
-      },
     });
+
+    // Add cache-control headers to prevent caching of availability data
+    response.headers.set(
+      "Cache-Control",
+      "no-store, no-cache, must-revalidate, proxy-revalidate"
+    );
+    response.headers.set("Pragma", "no-cache");
+    response.headers.set("Expires", "0");
+
+    return response;
   } catch (error) {
-    console.error("API Error:", error);
+    console.error("💥 SLOTS API Error:", error);
     return NextResponse.json(
       {
         error: "Internal server error",

@@ -1,7 +1,7 @@
 import { createRouteHandlerClient } from "@/lib/supabase-server";
 import { NextRequest, NextResponse } from "next/server";
 
-export async function GET(_request: NextRequest) {
+export async function GET(request: NextRequest) {
   try {
     const supabase = await createRouteHandlerClient();
 
@@ -48,9 +48,12 @@ export async function GET(_request: NextRequest) {
       features: Array.isArray(service.features) ? service.features : [],
       popular: service.is_popular,
       requiresPayment: service.requires_payment,
-      bufferBefore: service.buffer_before_minutes || 0,
-      bufferAfter: service.buffer_after_minutes || 5,
-      allowCustomBuffer: service.allow_custom_buffer,
+
+      // Buffer-related fields for BufferTimeManager
+      duration_minutes: service.duration_minutes,
+      buffer_before_minutes: service.buffer_before_minutes || 0,
+      buffer_after_minutes: service.buffer_after_minutes || 5,
+      allow_custom_buffer: service.allow_custom_buffer,
     }));
 
     return NextResponse.json({

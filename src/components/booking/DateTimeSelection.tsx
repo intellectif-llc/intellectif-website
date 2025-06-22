@@ -51,23 +51,53 @@ export default function DateTimeSelection({
   // Fetch available dates from database
   const fetchAvailableDates = useCallback(async () => {
     setDatesLoading(true);
+    console.log("🔍 FRONTEND - Fetching available dates:", {
+      serviceId,
+      timestamp: new Date().toISOString(),
+    });
+
     try {
       const params = new URLSearchParams();
       if (serviceId) {
         params.append("service_id", serviceId);
       }
       params.append("days_ahead", "21"); // Check more days to find availability
+      // Add timestamp to prevent caching
+      params.append("_t", Date.now().toString());
 
       const response = await fetch(`/api/availability/dates?${params}`);
       if (response.ok) {
         const data = await response.json();
+        console.log("📊 FRONTEND - Received dates data:", {
+          totalDates: data.availableDates?.length || 0,
+          availableDates:
+            data.availableDates?.map((d: any) => ({
+              date: d.value,
+              display: d.display,
+              slots: d.totalAvailableSlots,
+            })) || [],
+          serviceDuration: data.serviceDuration,
+          totalDatesChecked: data.totalDatesChecked,
+        });
+
         setAvailableDates(data.availableDates || []);
+
+        console.log("✅ FRONTEND - Updated availableDates state:", {
+          count: data.availableDates?.length || 0,
+          firstDate: data.availableDates?.[0]?.value,
+          lastDate:
+            data.availableDates?.[data.availableDates.length - 1]?.value,
+        });
       } else {
-        console.error("Failed to fetch available dates");
+        console.error(
+          "❌ FRONTEND - Failed to fetch available dates:",
+          response.status,
+          response.statusText
+        );
         setAvailableDates([]);
       }
     } catch (error) {
-      console.error("Error fetching available dates:", error);
+      console.error("💥 FRONTEND - Error fetching available dates:", error);
       setAvailableDates([]);
     } finally {
       setDatesLoading(false);
@@ -84,23 +114,56 @@ export default function DateTimeSelection({
     async (date: string) => {
       if (!date) return;
 
+      console.log("🔍 FRONTEND - Fetching time slots:", {
+        date,
+        serviceId,
+        timestamp: new Date().toISOString(),
+      });
+
       setLoading(true);
       try {
         const params = new URLSearchParams({ date });
         if (serviceId) {
           params.append("service_id", serviceId);
         }
+        // Add timestamp to prevent caching
+        params.append("_t", Date.now().toString());
 
         const response = await fetch(`/api/availability/slots?${params}`);
         if (response.ok) {
           const data = await response.json();
+          console.log("📊 FRONTEND - Received time slots data:", {
+            date: data.date,
+            totalSlots: data.timeSlots?.length || 0,
+            timeSlots:
+              data.timeSlots?.map((t: any) => ({
+                time: t.time,
+                display: t.display,
+                availableSlots: t.availableSlots,
+                consultantCount: t.consultants?.length || 0,
+              })) || [],
+            serviceDuration: data.serviceDuration,
+            slotInterval: data.slotInterval,
+            service: data.service,
+          });
+
           setTimeSlots(data.timeSlots || []);
+
+          console.log("✅ FRONTEND - Updated timeSlots state:", {
+            count: data.timeSlots?.length || 0,
+            firstSlot: data.timeSlots?.[0]?.time,
+            lastSlot: data.timeSlots?.[data.timeSlots?.length - 1]?.time,
+          });
         } else {
-          console.error("Failed to fetch time slots");
+          console.error(
+            "❌ FRONTEND - Failed to fetch time slots:",
+            response.status,
+            response.statusText
+          );
           setTimeSlots([]);
         }
       } catch (error) {
-        console.error("Error fetching time slots:", error);
+        console.error("💥 FRONTEND - Error fetching time slots:", error);
         setTimeSlots([]);
       } finally {
         setLoading(false);
@@ -108,6 +171,39 @@ export default function DateTimeSelection({
     },
     [serviceId]
   );
+
+  // Add event listeners for page focus and visibility change to refresh data
+  useEffect(() => {
+    const handleFocus = () => {
+      console.log("Page gained focus - refreshing availability data");
+      fetchAvailableDates();
+      // Also refresh time slots if a date is selected
+      if (selectedDate) {
+        fetchTimeSlots(selectedDate);
+      }
+    };
+
+    const handleVisibilityChange = () => {
+      if (!document.hidden) {
+        console.log("Page became visible - refreshing availability data");
+        fetchAvailableDates();
+        // Also refresh time slots if a date is selected
+        if (selectedDate) {
+          fetchTimeSlots(selectedDate);
+        }
+      }
+    };
+
+    // Add event listeners
+    window.addEventListener("focus", handleFocus);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    // Cleanup event listeners
+    return () => {
+      window.removeEventListener("focus", handleFocus);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, [fetchAvailableDates, fetchTimeSlots, selectedDate]);
 
   // Fetch time slots when date changes
   useEffect(() => {
