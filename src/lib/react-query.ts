@@ -9,9 +9,15 @@ export const queryClient = new QueryClient({
       // Keep data in cache longer for better UX when users navigate back
       gcTime: 10 * 60 * 1000, // 10 minutes (formerly cacheTime)
       // Retry failed requests (network issues are common)
-      retry: (failureCount: number, error: any) => {
+      retry: (failureCount: number, error: unknown) => {
         // Don't retry on 4xx errors (client errors)
-        if (error?.status >= 400 && error?.status < 500) {
+        if (
+          error &&
+          typeof error === "object" &&
+          "status" in error &&
+          (error.status as number) >= 400 &&
+          (error.status as number) < 500
+        ) {
           return false;
         }
         // Retry up to 2 times for network/server errors
@@ -29,8 +35,14 @@ export const queryClient = new QueryClient({
     },
     mutations: {
       // Retry mutations once on network errors
-      retry: (failureCount: number, error: any) => {
-        if (error?.status >= 400 && error?.status < 500) {
+      retry: (failureCount: number, error: unknown) => {
+        if (
+          error &&
+          typeof error === "object" &&
+          "status" in error &&
+          (error.status as number) >= 400 &&
+          (error.status as number) < 500
+        ) {
           return false;
         }
         return failureCount < 1;

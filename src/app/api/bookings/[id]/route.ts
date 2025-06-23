@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createRouteHandlerClient } from "@supabase/auth-helpers-nextjs";
-import { createServiceRoleClient } from "@/lib/supabase-server";
+import {
+  createRouteHandlerClient,
+  createServiceRoleClient,
+} from "@/lib/supabase-server";
 
 // Helper function to check if user is staff
 async function isStaff(
@@ -24,7 +26,7 @@ async function isStaff(
 // GET /api/bookings/[id] - Get specific booking
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const authSupabase = await createRouteHandlerClient();
@@ -36,7 +38,8 @@ export async function GET(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const bookingId = params.id;
+    const resolvedParams = await params;
+    const bookingId = resolvedParams.id;
     const serviceSupabase = createServiceRoleClient();
 
     // Get booking with full details
@@ -90,7 +93,7 @@ export async function GET(
 // PATCH /api/bookings/[id] - Update booking (assignment, status, etc.)
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const authSupabase = await createRouteHandlerClient();
@@ -102,9 +105,10 @@ export async function PATCH(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const bookingId = params.id;
+    const resolvedParams = await params;
+    const bookingId = resolvedParams.id;
     const body = await request.json();
-    const { action, consultant_id, status, notes } = body;
+    const { action, consultant_id, status } = body;
 
     // Check staff permissions for most operations
     const staffStatus = await isStaff(authSupabase, user.id);
@@ -126,7 +130,7 @@ export async function PATCH(
       return NextResponse.json({ error: "Booking not found" }, { status: 404 });
     }
 
-    let updateData: any = {};
+    const updateData: Record<string, string | number | Date | null> = {};
     let auditMessage = "";
 
     switch (action) {

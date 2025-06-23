@@ -1,10 +1,8 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useCallback, useEffect } from "react";
 import {
   useAvailableDates,
   useTimeSlots,
   usePrefetchTimeSlots,
-  TimeSlot,
-  AvailableDate,
 } from "@/hooks/useBookingData";
 
 interface DateTimeSelectionProps {
@@ -48,7 +46,7 @@ export default function DateTimeSelection({
   const serviceDuration = timeSlotsData?.serviceDuration;
 
   // Debug log to verify service duration and buffer data is available
-  React.useEffect(() => {
+  useEffect(() => {
     if (serviceInfo && serviceDuration) {
       console.log("🔧 Service configuration loaded:", {
         name: serviceInfo.name,
@@ -112,8 +110,8 @@ export default function DateTimeSelection({
               {datesError instanceof Error
                 ? datesError.message
                 : slotsError instanceof Error
-                ? slotsError.message
-                : "Failed to load availability data. Please refresh the page."}
+                  ? slotsError.message
+                  : "Failed to load availability data. Please refresh the page."}
             </p>
           </div>
         </div>
@@ -323,8 +321,8 @@ export default function DateTimeSelection({
                       !selectedDate || !time.available
                         ? "opacity-50 cursor-not-allowed"
                         : selectedTime === time.time
-                        ? "ring-2 ring-[#6bdcc0]"
-                        : "hover:-translate-y-1"
+                          ? "ring-2 ring-[#6bdcc0]"
+                          : "hover:-translate-y-1"
                     }
                   `}
                   style={{

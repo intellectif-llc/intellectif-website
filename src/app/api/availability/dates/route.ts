@@ -89,15 +89,25 @@ export async function GET(request: NextRequest) {
           console.log(`  📊 Raw consultant data for ${timeSlot}:`, {
             consultantCount: consultants?.length || 0,
             consultants:
-              consultants?.map((c: any) => ({
-                id: c.consultant_id,
-                name: c.consultant_name,
-                availableSlots: c.available_slots,
-                currentBookings: c.current_bookings,
-                availableStart: c.available_start,
-                availableEnd: c.available_end,
-                maxBookings: c.max_bookings,
-              })) || [],
+              consultants?.map(
+                (c: {
+                  consultant_id: string;
+                  consultant_name: string;
+                  available_slots: number;
+                  current_bookings: number;
+                  available_start: string;
+                  available_end: string;
+                  max_bookings: number;
+                }) => ({
+                  id: c.consultant_id,
+                  name: c.consultant_name,
+                  availableSlots: c.available_slots,
+                  currentBookings: c.current_bookings,
+                  availableStart: c.available_start,
+                  availableEnd: c.available_end,
+                  maxBookings: c.max_bookings,
+                })
+              ) || [],
           });
 
           // Check if this time slot has available consultants

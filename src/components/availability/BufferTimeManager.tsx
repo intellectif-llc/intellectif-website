@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import toast from "react-hot-toast";
+import { supabase } from "@/lib/supabase";
 
 interface Service {
   id: string;
@@ -22,11 +23,11 @@ interface BufferPreference {
 }
 
 interface BufferTimeManagerProps {
-  consultantId: string;
+  consultantId?: string;
 }
 
 export default function BufferTimeManager({
-  consultantId,
+  consultantId = "70e38933-140f-4229-a957-fee6bb9cac78", // Default for testing
 }: BufferTimeManagerProps) {
   const [services, setServices] = useState<Service[]>([]);
   const [bufferPreferences, setBufferPreferences] = useState<
@@ -35,37 +36,41 @@ export default function BufferTimeManager({
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
-  // Fetch services and existing buffer preferences
-  useEffect(() => {
-    fetchData();
-  }, [consultantId]);
+  const fetchData = useCallback(async () => {
+    if (!consultantId) return;
 
-  const fetchData = async () => {
+    setLoading(true);
+
     try {
-      setLoading(true);
-
       // Fetch services
-      const servicesResponse = await fetch("/api/services");
-      if (servicesResponse.ok) {
-        const servicesData = await servicesResponse.json();
-        setServices(servicesData.services || []);
-      }
+      const { data: servicesData, error: servicesError } = await supabase
+        .from("services")
+        .select("*")
+        .eq("is_active", true);
 
-      // Fetch existing buffer preferences
-      const preferencesResponse = await fetch(
-        `/api/availability/buffer-preferences?consultant_id=${consultantId}`
-      );
-      if (preferencesResponse.ok) {
-        const preferencesData = await preferencesResponse.json();
-        setBufferPreferences(preferencesData.preferences || []);
-      }
+      if (servicesError) throw servicesError;
+
+      // Fetch current buffer preferences for this consultant
+      const { data: preferencesData, error: preferencesError } = await supabase
+        .from("consultant_buffer_preferences")
+        .select("*")
+        .eq("consultant_id", consultantId)
+        .eq("is_active", true);
+
+      if (preferencesError) throw preferencesError;
+
+      setServices(servicesData || []);
+      setBufferPreferences(preferencesData || []);
     } catch (error) {
-      console.error("Error fetching buffer data:", error);
-      toast.error("Failed to load buffer preferences");
+      console.error("Error fetching data:", error);
     } finally {
       setLoading(false);
     }
-  };
+  }, [consultantId]);
+
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
 
   const getPreferenceForService = (serviceId: string): BufferPreference => {
     const existing = bufferPreferences.find(
@@ -86,7 +91,7 @@ export default function BufferTimeManager({
   const updatePreference = (
     serviceId: string,
     field: keyof BufferPreference,
-    value: any
+    value: number | string
   ) => {
     const currentPreferences = [...bufferPreferences];
     const existingIndex = currentPreferences.findIndex(

@@ -3,6 +3,7 @@ import {
   createServiceRoleClient,
 } from "@/lib/supabase-server";
 import { NextRequest, NextResponse } from "next/server";
+import { sendBookingConfirmationEmail } from "@/lib/email-service";
 
 // Helper function to check if user is staff
 async function isStaff(
@@ -163,6 +164,38 @@ export async function POST(request: NextRequest) {
 
     const booking = bookingResult.booking;
     const consultant = bookingResult.consultant;
+
+    // Send confirmation email for all bookings (free and paid)
+    try {
+      // Format the scheduled time properly
+      const scheduledTimeFormatted = new Date(
+        `${scheduledDate}T${scheduledTime}:00`
+      ).toLocaleTimeString("en-US", {
+        hour: "numeric",
+        minute: "2-digit",
+        hour12: true,
+        timeZoneName: "short",
+      });
+
+      await sendBookingConfirmationEmail({
+        customerName: `${customerData.firstName} ${customerData.lastName}`,
+        customerEmail: customerData.email,
+        serviceName: service.name,
+        bookingReference: booking.booking_reference,
+        scheduledDate: scheduledDate,
+        scheduledTime: scheduledTimeFormatted,
+        duration: service.duration_minutes,
+        price: service.requires_payment ? service.price : undefined,
+        meetingUrl: "https://meet.google.com/mgp-uzoc-hkz",
+      });
+      console.log("✅ Booking confirmation email sent successfully");
+    } catch (emailError) {
+      console.error(
+        "❌ Failed to send booking confirmation email:",
+        emailError
+      );
+      // Don't fail the booking if email fails - booking was successful
+    }
 
     // Create follow-up task if required
     if (booking.follow_up_required) {

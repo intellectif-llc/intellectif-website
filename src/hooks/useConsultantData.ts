@@ -143,6 +143,51 @@ const saveBufferPreferences = async (preferences: BufferPreference[]) => {
   return response.json();
 };
 
+const applyTemplateSet = async (templateSetId: string) => {
+  const response = await fetch("/api/availability/templates/apply", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ templateSetId }),
+  });
+  if (!response.ok) {
+    const error = await response
+      .json()
+      .catch(() => ({ error: "Unknown error" }));
+    throw new Error(error.error || "Failed to apply template set");
+  }
+  return response.json();
+};
+
+const saveCurrentTemplateSet = async (name: string, description?: string) => {
+  const response = await fetch("/api/availability/templates/save", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name, description }),
+  });
+  if (!response.ok) {
+    const error = await response
+      .json()
+      .catch(() => ({ error: "Unknown error" }));
+    throw new Error(error.error || "Failed to save template set");
+  }
+  return response.json();
+};
+
+const copyAvailabilityDay = async (sourceDay: number, targetDay: number) => {
+  const response = await fetch("/api/availability/templates/copy", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ sourceDay, targetDay }),
+  });
+  if (!response.ok) {
+    const error = await response
+      .json()
+      .catch(() => ({ error: "Unknown error" }));
+    throw new Error(error.error || "Failed to copy availability");
+  }
+  return response.json();
+};
+
 // Custom hooks
 export function useBookings() {
   return useQuery({
@@ -150,9 +195,15 @@ export function useBookings() {
     queryFn: fetchBookings,
     staleTime: 30 * 1000, // Bookings change frequently
     select: (data) => data.bookings,
-    retry: (failureCount, error: any) => {
+    retry: (failureCount, error: Error | unknown) => {
       // Don't retry on 401 (unauthorized)
-      if (error?.message?.includes("401")) {
+      if (
+        error &&
+        typeof error === "object" &&
+        "message" in error &&
+        typeof error.message === "string" &&
+        error.message.includes("401")
+      ) {
         return false;
       }
       return failureCount < 2;
@@ -254,27 +305,33 @@ export function useOptimisticTemplates() {
       id: `temp-${Date.now()}`, // Temporary ID
     };
 
-    queryClient.setQueryData(queryKeys.templates, (oldData: any) => {
-      if (!oldData?.templates) return oldData;
-      return {
-        ...oldData,
-        templates: [...oldData.templates, optimisticTemplate],
-      };
-    });
+    queryClient.setQueryData(
+      queryKeys.templates,
+      (oldData: { templates?: AvailabilityTemplate[] } | undefined) => {
+        if (!oldData?.templates) return oldData;
+        return {
+          ...oldData,
+          templates: [...oldData.templates, optimisticTemplate],
+        };
+      }
+    );
 
     return optimisticTemplate.id;
   };
 
   const removeTemplateOptimistically = (id: string) => {
-    queryClient.setQueryData(queryKeys.templates, (oldData: any) => {
-      if (!oldData?.templates) return oldData;
-      return {
-        ...oldData,
-        templates: oldData.templates.filter(
-          (t: AvailabilityTemplate) => t.id !== id
-        ),
-      };
-    });
+    queryClient.setQueryData(
+      queryKeys.templates,
+      (oldData: { templates?: AvailabilityTemplate[] } | undefined) => {
+        if (!oldData?.templates) return oldData;
+        return {
+          ...oldData,
+          templates: oldData.templates.filter(
+            (t: AvailabilityTemplate) => t.id !== id
+          ),
+        };
+      }
+    );
   };
 
   return {
@@ -295,4 +352,56 @@ export function useRealTimeBookings() {
   // for real-time updates when bookings are created/modified
 
   return { refreshBookings };
+}
+
+export function useApplyTemplateSet() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ templateSetId }: { templateSetId: string }) =>
+      applyTemplateSet(templateSetId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: ["availability-templates"],
+      });
+    },
+  });
+}
+
+export function useSaveTemplateSet() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({
+      name,
+      description,
+    }: {
+      name: string;
+      description?: string;
+    }) => saveCurrentTemplateSet(name, description),
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: ["template-sets"],
+      });
+    },
+  });
+}
+
+export function useCopyAvailability() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({
+      sourceDay,
+      targetDay,
+    }: {
+      sourceDay: number;
+      targetDay: number;
+    }) => copyAvailabilityDay(sourceDay, targetDay),
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: ["availability-templates"],
+      });
+    },
+  });
 }

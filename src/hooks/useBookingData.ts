@@ -58,6 +58,27 @@ export interface BookingData {
   assignmentStrategy?: string;
 }
 
+// Add proper booking response types
+export interface BookingConsultant {
+  id: string;
+  name: string;
+  assignmentReason: string;
+  confidenceScore: number;
+}
+
+export interface BookingResponse {
+  booking: {
+    id: string;
+    bookingReference: string;
+    status: string;
+    scheduledDateTime: string;
+    service: Record<string, unknown>; // More specific than any
+    consultant: BookingConsultant;
+    paymentStatus: string;
+    paymentAmount: number;
+  };
+}
+
 // API functions
 const fetchServices = async (): Promise<{ services: Service[] }> => {
   const response = await fetch("/api/services");
@@ -115,7 +136,9 @@ const fetchTimeSlots = async (
   return response.json();
 };
 
-const createBooking = async (bookingData: BookingData) => {
+const createBooking = async (
+  bookingData: BookingData
+): Promise<BookingResponse> => {
   const response = await fetch("/api/bookings", {
     method: "POST",
     headers: {
@@ -176,9 +199,9 @@ export function useTimeSlots(date: string, serviceId?: string) {
 export function useCreateBooking() {
   const queryClient = useQueryClient();
 
-  return useMutation({
+  return useMutation<BookingResponse, Error, BookingData>({
     mutationFn: createBooking,
-    onSuccess: (data) => {
+    onSuccess: (_data: BookingResponse) => {
       // Invalidate and refetch availability data
       invalidateAvailabilityQueries();
       invalidateBookingQueries();
@@ -205,25 +228,28 @@ export function useOptimisticTimeSlots(date: string, serviceId?: string) {
   ) => {
     const queryKey = queryKeys.timeSlots(date, serviceId);
 
-    queryClient.setQueryData(queryKey, (oldData: any) => {
-      if (!oldData?.timeSlots) return oldData;
+    queryClient.setQueryData(
+      queryKey,
+      (oldData: { timeSlots?: TimeSlot[] } | undefined) => {
+        if (!oldData?.timeSlots) return oldData;
 
-      return {
-        ...oldData,
-        timeSlots: oldData.timeSlots.map((slot: TimeSlot) => {
-          if (slot.time === timeSlot && slot.availableSlots > 0) {
-            return {
-              ...slot,
-              availableSlots: reduce
-                ? Math.max(0, slot.availableSlots - 1)
-                : slot.availableSlots + 1,
-              available: reduce ? slot.availableSlots > 1 : true,
-            };
-          }
-          return slot;
-        }),
-      };
-    });
+        return {
+          ...oldData,
+          timeSlots: oldData.timeSlots.map((slot: TimeSlot) => {
+            if (slot.time === timeSlot && slot.availableSlots > 0) {
+              return {
+                ...slot,
+                availableSlots: reduce
+                  ? Math.max(0, slot.availableSlots - 1)
+                  : slot.availableSlots + 1,
+                available: reduce ? slot.availableSlots > 1 : true,
+              };
+            }
+            return slot;
+          }),
+        };
+      }
+    );
   };
 
   return { updateTimeSlotOptimistically };

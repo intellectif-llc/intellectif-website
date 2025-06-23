@@ -16,36 +16,31 @@ export async function GET(request: NextRequest) {
     });
 
     // 1. Check existing bookings for the date
-    const { data: existingBookings, error: bookingsError } = await supabase
+    const { data: existingBookings } = await supabase
       .from("bookings")
       .select(
         `
         id,
         scheduled_time,
         consultant_id,
-        status,
-        service_id,
-        services!inner(name, duration_minutes)
+        service:services!inner(duration_minutes, buffer_before_minutes, buffer_after_minutes)
       `
       )
       .eq("scheduled_date", testDate)
-      .in("status", ["confirmed", "pending"])
-      .order("scheduled_time");
+      .eq("consultant_id", "123e4567-e89b-12d3-a456-426614174000");
 
-    console.log("📋 Existing bookings for", testDate, ":", {
+    console.log("📅 Existing bookings for date:", {
       count: existingBookings?.length || 0,
       bookings:
-        existingBookings?.map((b: any) => ({
+        existingBookings?.map((b: Record<string, unknown>) => ({
           time: b.scheduled_time,
           consultant: b.consultant_id,
-          service: b.services?.name,
-          duration: b.services?.duration_minutes,
-          status: b.status,
+          id: b.id,
         })) || [],
     });
 
     // 2. Check availability templates
-    const { data: templates, error: templatesError } = await supabase
+    const { data: templates } = await supabase
       .from("availability_templates")
       .select(
         `
@@ -68,12 +63,17 @@ export async function GET(request: NextRequest) {
     console.log("🗓️ Availability templates for day", targetDayOfWeek, ":", {
       totalTemplates: templates?.length || 0,
       templatesForTargetDay: templatesForDay.length,
-      templates: templatesForDay.map((t) => ({
-        consultant: `${t.profiles?.first_name} ${t.profiles?.last_name}`,
-        consultantId: t.consultant_id,
-        timeSlot: `${t.start_time} - ${t.end_time}`,
-        maxBookings: t.max_bookings,
-      })),
+      templates: templatesForDay.map((t: Record<string, unknown>) => {
+        const profiles = t.profiles as
+          | { first_name?: string; last_name?: string }
+          | undefined;
+        return {
+          consultant: `${profiles?.first_name || "Unknown"} ${profiles?.last_name || "Consultant"}`,
+          consultantId: t.consultant_id,
+          timeSlot: `${t.start_time} - ${t.end_time}`,
+          maxBookings: t.max_bookings,
+        };
+      }),
     });
 
     // 3. Test specific time slots with detailed analysis
@@ -84,7 +84,7 @@ export async function GET(request: NextRequest) {
       console.log(`\n🧪 DETAILED ANALYSIS FOR ${testTime}:`);
 
       // Get raw database function result
-      const { data: consultants, error } = await supabase.rpc(
+      const { data: consultants } = await supabase.rpc(
         "get_available_consultants_with_buffer",
         {
           target_date: testDate,
@@ -105,11 +105,17 @@ export async function GET(request: NextRequest) {
       console.log(`📊 Daily availability for consultant:`, {
         error: dailyError,
         availability:
-          dailyAvailability?.map((a) => ({
-            start: a.available_start,
-            end: a.available_end,
-            maxBookings: a.max_bookings,
-          })) || [],
+          dailyAvailability?.map(
+            (a: {
+              available_start: string;
+              available_end: string;
+              max_bookings: number;
+            }) => ({
+              start: a.available_start,
+              end: a.available_end,
+              maxBookings: a.max_bookings,
+            })
+          ) || [],
       });
 
       // Check buffer preferences for this consultant-service combination
@@ -129,7 +135,7 @@ export async function GET(request: NextRequest) {
       const result = {
         time: testTime,
         consultants:
-          consultants?.map((c: any) => ({
+          consultants?.map((c: Record<string, unknown>) => ({
             id: c.consultant_id,
             name: c.consultant_name,
             availableSlots: c.available_slots,
@@ -150,7 +156,8 @@ export async function GET(request: NextRequest) {
       console.log(`📊 Result summary for ${testTime}:`, {
         availableConsultants: result.consultants.length,
         totalSlots: result.consultants.reduce(
-          (sum, c) => sum + c.availableSlots,
+          (sum: number, c: { availableSlots: unknown }) =>
+            sum + (typeof c.availableSlots === "number" ? c.availableSlots : 0),
           0
         ),
       });
@@ -160,13 +167,22 @@ export async function GET(request: NextRequest) {
     console.log("\n🎯 MANUAL CONFLICT DETECTION SIMULATION:");
 
     if (existingBookings && existingBookings.length > 0) {
-      const booking = existingBookings[0]; // Assume the 11:00 AM booking
+      const booking = existingBookings[0] as {
+        scheduled_time: string;
+        service: Array<{
+          duration_minutes: number;
+          buffer_before_minutes: number;
+          buffer_after_minutes: number;
+        }>;
+        [key: string]: unknown;
+      };
       const bufferInfo = detailedResults[0]?.bufferInfo;
 
-      if (bufferInfo) {
+      if (bufferInfo && booking.service && booking.service.length > 0) {
+        const serviceInfo = booking.service[0];
         console.log("📋 Simulating conflict detection for existing booking:", {
           bookingTime: booking.scheduled_time,
-          serviceDuration: booking.services?.duration_minutes,
+          serviceDuration: serviceInfo.duration_minutes,
           bufferBefore: bufferInfo.buffer_before_minutes,
           bufferAfter: bufferInfo.buffer_after_minutes,
         });
@@ -179,7 +195,7 @@ export async function GET(request: NextRequest) {
         const bookingStart = booking.scheduled_time;
         const bookingEnd = `${parseInt(booking.scheduled_time.split(":")[0])}:${
           parseInt(booking.scheduled_time.split(":")[1]) +
-          booking.services?.duration_minutes +
+          serviceInfo.duration_minutes +
           bufferInfo.buffer_after_minutes
         }`;
 

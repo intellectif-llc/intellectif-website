@@ -1,1 +1,0 @@
-# Intellectif Booking System Strategy

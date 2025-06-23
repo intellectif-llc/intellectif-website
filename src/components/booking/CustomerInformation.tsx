@@ -21,6 +21,7 @@ interface CustomerInformationProps {
   customerData: CustomerData | null;
   onCustomerDataUpdate: (data: CustomerData) => void;
   onPrevious: () => void;
+  onNext?: () => void; // Add onNext for paid services
   bookingData: BookingData;
 }
 
@@ -28,6 +29,7 @@ export default function CustomerInformation({
   customerData,
   onCustomerDataUpdate,
   onPrevious,
+  onNext,
   bookingData,
 }: CustomerInformationProps) {
   const [formData, setFormData] = useState<CustomerData>({
@@ -100,12 +102,37 @@ export default function CustomerInformation({
       return;
     }
 
+    // Update customer data in parent component
+    onCustomerDataUpdate({
+      firstName: formData.firstName,
+      lastName: formData.lastName,
+      email: formData.email,
+      phone: formData.phone,
+      company: formData.company,
+      projectDescription: formData.projectDescription,
+    });
+
+    // Check if this is a paid service
+    const isPaidService =
+      bookingData.service?.price && bookingData.service.price > 0;
+
+    if (isPaidService) {
+      // For paid services, proceed to payment step
+      // The booking will be created after successful payment
+      console.log("Paid service detected - proceeding to payment step");
+      onNext?.(); // Call onNext to proceed to payment step
+      return;
+    }
+
+    // For free services, create the booking immediately
+    console.log("Free service detected - creating booking immediately");
+
     // Optimistically update the UI (reduce available slots)
     if (bookingData.dateTime?.time) {
       updateTimeSlotOptimistically(bookingData.dateTime.time, true);
     }
 
-    // Use TanStack Query mutation
+    // Use TanStack Query mutation for free bookings
     createBookingMutation.mutate(
       {
         serviceId: bookingData.service?.id || "",
@@ -125,13 +152,13 @@ export default function CustomerInformation({
         onSuccess: (result) => {
           // Show success details
           toast.success(
-            `Booking reference: ${result.booking.bookingReference}`,
+            `Booking confirmed! Reference: ${result.booking.bookingReference}`,
             {
               duration: 6000,
             }
           );
 
-          console.log("Booking created:", result.booking);
+          console.log("Free booking created:", result.booking);
 
           // Reset form after successful submission
           setTimeout(() => {

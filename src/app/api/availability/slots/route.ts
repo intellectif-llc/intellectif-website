@@ -151,40 +151,53 @@ export async function GET(request: NextRequest) {
         console.log(`📊 Raw consultant data for ${timeString}:`, {
           consultantCount: consultants?.length || 0,
           consultants:
-            consultants?.map((c: any) => ({
-              id: c.consultant_id,
-              name: c.consultant_name,
-              availableSlots: c.available_slots,
-              currentBookings: c.current_bookings,
-              availableStart: c.available_start,
-              availableEnd: c.available_end,
-              maxBookings: c.max_bookings,
-              ...(serviceId && {
-                totalDuration: c.total_duration_minutes,
-                bufferBefore: c.buffer_before,
-                bufferAfter: c.buffer_after,
-                requiredStartTime: `${timeString} - ${c.buffer_before}min = ${
-                  new Date(`2000-01-01 ${timeString}`).getTime() -
-                    c.buffer_before * 60000 >=
-                  0
-                    ? new Date(
-                        new Date(`2000-01-01 ${timeString}`).getTime() -
-                          c.buffer_before * 60000
-                      )
-                        .toTimeString()
-                        .slice(0, 5)
-                    : "INVALID"
-                }`,
-                requiredEndTime: `${timeString} + ${
-                  c.total_duration_minutes
-                }min = ${new Date(
-                  new Date(`2000-01-01 ${timeString}`).getTime() +
-                    c.total_duration_minutes * 60000
-                )
-                  .toTimeString()
-                  .slice(0, 5)}`,
-              }),
-            })) || [],
+            consultants?.map(
+              (c: {
+                consultant_id: string;
+                consultant_name: string;
+                available_slots: number;
+                current_bookings: number;
+                available_start: string;
+                available_end: string;
+                max_bookings: number;
+                total_duration_minutes: number;
+                buffer_before: number;
+                buffer_after: number;
+              }) => ({
+                id: c.consultant_id,
+                name: c.consultant_name,
+                availableSlots: c.available_slots,
+                currentBookings: c.current_bookings,
+                availableStart: c.available_start,
+                availableEnd: c.available_end,
+                maxBookings: c.max_bookings,
+                ...(serviceId && {
+                  totalDuration: c.total_duration_minutes,
+                  bufferBefore: c.buffer_before,
+                  bufferAfter: c.buffer_after,
+                  requiredStartTime: `${timeString} - ${c.buffer_before}min = ${
+                    new Date(`2000-01-01 ${timeString}`).getTime() -
+                      c.buffer_before * 60000 >=
+                    0
+                      ? new Date(
+                          new Date(`2000-01-01 ${timeString}`).getTime() -
+                            c.buffer_before * 60000
+                        )
+                          .toTimeString()
+                          .slice(0, 5)
+                      : "INVALID"
+                  }`,
+                  requiredEndTime: `${timeString} + ${
+                    c.total_duration_minutes
+                  }min = ${new Date(
+                    new Date(`2000-01-01 ${timeString}`).getTime() +
+                      c.total_duration_minutes * 60000
+                  )
+                    .toTimeString()
+                    .slice(0, 5)}`,
+                }),
+              })
+            ) || [],
         });
 
         if (

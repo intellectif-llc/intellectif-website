@@ -5,6 +5,7 @@ import BookingStepIndicator from "@/components/booking/BookingStepIndicator";
 import ServiceSelection from "@/components/booking/ServiceSelection";
 import DateTimeSelection from "@/components/booking/DateTimeSelection";
 import CustomerInformation from "@/components/booking/CustomerInformation";
+import PaymentStep from "@/components/booking/PaymentStep";
 
 export interface BookingData {
   service: {
@@ -39,7 +40,8 @@ export default function BookingPage() {
     customer: null,
   });
 
-  const totalSteps = 3;
+  const totalSteps =
+    bookingData.service?.price && bookingData.service.price > 0 ? 4 : 3;
 
   const handleNextStep = () => {
     if (currentStep < totalSteps) {
@@ -95,7 +97,16 @@ export default function BookingPage() {
               updateBookingData("customer", customer)
             }
             onPrevious={handlePreviousStep}
+            onNext={handleNextStep} // Add onNext for paid services
             bookingData={bookingData}
+          />
+        );
+      case 4:
+        // Payment step for paid services
+        return (
+          <PaymentStep
+            bookingData={bookingData}
+            onPrevious={handlePreviousStep}
           />
         );
       default:

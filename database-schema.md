@@ -1765,3 +1765,53 @@ CONSTRAINT users_pkey PRIMARY KEY (id)
 | user_role            | admin                  |
 | user_role            | consultant             |
 | user_role            | sales                  |
+
+## Database indexes in public schema
+
+| index_name                      | is_unique | is_primary | column_name       |
+| ------------------------------- | --------- | ---------- | ----------------- |
+| audit_log                       | true      | true       | id                |
+| availability_breaks             | false     | false      | consultant_id     |
+| availability_breaks             | true      | false      | consultant_id     |
+| availability_breaks             | false     | false      | day_of_week       |
+| availability_breaks             | true      | false      | day_of_week       |
+| availability_breaks             | true      | false      | end_time          |
+| availability_breaks             | true      | true       | id                |
+| availability_breaks             | true      | false      | start_time        |
+| availability_overrides          | true      | false      | consultant_id     |
+| availability_overrides          | true      | false      | end_time          |
+| availability_overrides          | true      | true       | id                |
+| availability_overrides          | true      | false      | specific_date     |
+| availability_overrides          | true      | false      | start_time        |
+| availability_template_set_items | true      | true       | id                |
+| availability_template_sets      | true      | false      | consultant_id     |
+| availability_template_sets      | true      | true       | id                |
+| availability_template_sets      | true      | false      | set_name          |
+| availability_templates          | true      | false      | consultant_id     |
+| availability_templates          | false     | false      | consultant_id     |
+| availability_templates          | true      | false      | day_of_week       |
+| availability_templates          | false     | false      | day_of_week       |
+| availability_templates          | true      | false      | end_time          |
+| availability_templates          | true      | true       | id                |
+| availability_templates          | true      | false      | start_time        |
+| availability_timeoff            | false     | false      | consultant_id     |
+| availability_timeoff            | false     | false      | end_date          |
+| availability_timeoff            | false     | false      | end_date          |
+| availability_timeoff            | true      | true       | id                |
+| availability_timeoff            | false     | false      | start_date        |
+| availability_timeoff            | false     | false      | start_date        |
+| bookings                        | true      | false      | booking_reference |
+| bookings                        | true      | true       | id                |
+| consultant_buffer_preferences   | true      | false      | consultant_id     |
+| consultant_buffer_preferences   | false     | false      | consultant_id     |
+| consultant_buffer_preferences   | true      | true       | id                |
+| consultant_buffer_preferences   | true      | false      | service_id        |
+| consultant_buffer_preferences   | false     | false      | service_id        |
+| customer_interactions           | true      | true       | id                |
+| customer_metrics                | true      | true       | id                |
+| follow_ups                      | true      | true       | id                |
+| profiles                        | true      | true       | id                |
+| projects                        | true      | true       | id                |
+| services                        | true      | true       | id                |
+| services                        | true      | false      | slug              |
+| voice_consultations             | true      | true       | id                |
