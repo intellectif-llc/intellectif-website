@@ -964,34 +964,59 @@ DECLARE
   first_name_val TEXT;
   last_name_val TEXT;
 BEGIN
-  -- Get first_name and last_name from metadata (preferred)
-  first_name_val := COALESCE(NEW.raw_user_meta_data->>'first_name', '');
-  last_name_val := COALESCE(NEW.raw_user_meta_data->>'last_name', '');
+  -- This first block handles the original task of creating a profile.
+  -- It is wrapped in its own BEGIN/EXCEPTION block to ensure that even if profile creation fails,
+  -- the function can still attempt to link existing records.
+  BEGIN
+    -- Get first_name and last_name from metadata (preferred)
+    first_name_val := COALESCE(NEW.raw_user_meta_data->>'first_name', '');
+    last_name_val := COALESCE(NEW.raw_user_meta_data->>'last_name', '');
 
-  -- If separate names are empty, try to parse full_name as fallback
-  IF first_name_val = '' AND last_name_val = '' THEN
-    full_name_val := COALESCE(NEW.raw_user_meta_data->>'full_name', '');
-    IF full_name_val != '' THEN
-      first_name_val := SPLIT_PART(full_name_val, ' ', 1);
-      last_name_val := TRIM(SUBSTRING(full_name_val FROM LENGTH(SPLIT_PART(full_name_val, ' ', 1)) + 2));
+    -- If separate names are empty, try to parse full_name as a fallback
+    IF first_name_val = '' AND last_name_val = '' THEN
+      full_name_val := COALESCE(NEW.raw_user_meta_data->>'full_name', '');
+      IF full_name_val != '' THEN
+        first_name_val := SPLIT_PART(full_name_val, ' ', 1);
+        last_name_val := TRIM(SUBSTRING(full_name_val FROM LENGTH(SPLIT_PART(full_name_val, ' ', 1)) + 2));
+      END IF;
     END IF;
-  END IF;
 
-  -- Insert profile record
-  INSERT INTO public.profiles (id, first_name, last_name, company)
-  VALUES (
-    NEW.id,
-    first_name_val,
-    last_name_val,
-    COALESCE(NEW.raw_user_meta_data->>'company', '')
-  );
+    -- Insert profile record into public.profiles
+    INSERT INTO public.profiles (id, first_name, last_name, company)
+    VALUES (
+      NEW.id,
+      first_name_val,
+      last_name_val,
+      COALESCE(NEW.raw_user_meta_data->>'company', '')
+    );
+  EXCEPTION
+    WHEN others THEN
+      RAISE WARNING '[handle_new_user] - Failed to create profile for user %: %', NEW.id, SQLERRM;
+  END;
+
+  -- This second block contains the new logic for linking existing records.
+  -- It is also wrapped in its own exception block to log errors without failing the entire trigger.
+  BEGIN
+    -- Step 1: Find and update customer_metrics records.
+    -- It finds records with a matching email (case-insensitive) that are not yet linked to a user.
+    UPDATE public.customer_metrics
+    SET user_id = NEW.id, updated_at = now()
+    WHERE lower(public.customer_metrics.email) = lower(NEW.email) AND public.customer_metrics.user_id IS NULL;
+
+    -- Step 2: Find and update associated bookings records.
+    -- It updates bookings that belong to the customer_metrics records we just updated in Step 1.
+    UPDATE public.bookings
+    SET user_id = NEW.id, updated_at = now()
+    WHERE public.bookings.customer_metrics_id IN (
+      SELECT id FROM public.customer_metrics WHERE public.customer_metrics.user_id = NEW.id
+    ) AND public.bookings.user_id IS NULL;
+
+  EXCEPTION
+    WHEN others THEN
+      RAISE WARNING '[handle_new_user] - Failed to link existing records for user %: %', NEW.id, SQLERRM;
+  END;
 
   RETURN NEW;
-EXCEPTION
-  WHEN others THEN
-    -- Log error but don't fail the user creation
-    RAISE WARNING 'Failed to create profile for user %: %', NEW.id, SQLERRM;
-    RETURN NEW;
 END;
 $function$
 ```
