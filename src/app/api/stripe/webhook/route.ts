@@ -3,6 +3,8 @@ import { createServiceRoleClient } from "@/lib/supabase-server";
 import { stripe } from "@/lib/stripe-server";
 import { headers } from "next/headers";
 import { sendPaymentConfirmationEmail } from "@/lib/email-service";
+import { googleCalendarSimpleService } from "@/lib/google-calendar-simple";
+import type { CreateMeetingParams } from "@/lib/google-calendar-simple";
 import type Stripe from "stripe";
 
 // Import helper function from bookings API
@@ -196,7 +198,110 @@ async function handlePaymentSucceeded(
       company: metadata.customerCompany || null,
     });
 
+    // 🚀 GET SERVICE DETAILS AND CREATE GOOGLE MEET MEETING
+    let googleMeetData = null;
+    try {
+      // Get service details first
+      const { data: service } = await supabase
+        .from("services")
+        .select("*")
+        .eq("id", metadata.serviceId)
+        .single();
+
+      if (service) {
+        // Get optimal consultant assignment for Google Meet creation
+        const { data: consultantAssignment } = await supabase.rpc(
+          "get_optimal_consultant_assignment",
+          {
+            target_date: metadata.scheduledDate,
+            target_time: metadata.scheduledTime,
+            service_id_param: metadata.serviceId,
+            assignment_strategy_param: "optimal",
+          }
+        );
+
+        if (consultantAssignment && consultantAssignment.length > 0) {
+          const assignedConsultant = consultantAssignment[0];
+          console.log("🎯 Creating Google Meet for assigned consultant:", {
+            id: assignedConsultant.consultant_id,
+            name: assignedConsultant.consultant_name,
+          });
+
+          // Get consultant email from profiles table
+          const { data: consultantProfile } = await supabase
+            .from("profiles")
+            .select("first_name, last_name")
+            .eq("id", assignedConsultant.consultant_id)
+            .single();
+
+          // Get consultant email using the secure function
+          const { data: consultantEmail } = await supabase.rpc(
+            "get_user_email",
+            { user_id: assignedConsultant.consultant_id }
+          );
+          console.log("👤 Consultant details for Google Meet:", {
+            email: consultantEmail,
+            profile: consultantProfile,
+          });
+
+          // Create Google Meet meeting
+          const startDateTime = new Date(
+            `${metadata.scheduledDate}T${metadata.scheduledTime}:00`
+          );
+          const endDateTime = new Date(
+            startDateTime.getTime() + service.duration_minutes * 60000
+          );
+
+          const meetingParams: CreateMeetingParams = {
+            consultantId: assignedConsultant.consultant_id,
+            bookingId: "webhook_" + Date.now(), // Temporary ID for webhook
+            customerName: `${metadata.customerFirstName} ${metadata.customerLastName}`,
+            customerEmail: metadata.customerEmail,
+            consultantEmail: consultantEmail || "",
+            serviceName: service.name,
+            startTime: startDateTime.toISOString(),
+            endTime: endDateTime.toISOString(),
+            timezone: "UTC",
+          };
+
+          console.log(
+            "📅 Creating Google Meet via webhook with params:",
+            meetingParams
+          );
+
+          const meetingDetails =
+            await googleCalendarSimpleService.createConsultationMeeting(
+              meetingParams
+            );
+
+          if (meetingDetails) {
+            googleMeetData = {
+              meeting_url: meetingDetails.meetingUrl,
+              google_calendar_event_id: meetingDetails.calendarEventId,
+              google_calendar_link: meetingDetails.calendarLink,
+              meeting_platform: "google_meet",
+            };
+
+            console.log("✅ Google Meet created successfully via webhook:", {
+              meetingUrl: meetingDetails.meetingUrl,
+              eventId: meetingDetails.calendarEventId,
+              calendarLink: meetingDetails.calendarLink,
+            });
+          } else {
+            console.log("⚠️ Google Meet creation returned null via webhook");
+          }
+        }
+      }
+    } catch (googleError) {
+      console.error("❌ Error creating Google Meet via webhook:", googleError);
+      console.log("⚠️ Will proceed without Google Meet");
+    }
+
     // Create booking with payment already confirmed
+    console.log(
+      "📋 Creating booking via webhook with Google Meet data:",
+      googleMeetData
+    );
     const { data: createdBooking, error: createError } = await supabase.rpc(
       "create_booking_with_availability_check",
       {
@@ -215,6 +320,7 @@ async function handlePaymentSucceeded(
         project_description_param: metadata.projectDescription,
         assignment_strategy_param: "optimal",
         lead_score_param: 70, // Paid service = higher lead score
+        google_meet_data_param: googleMeetData, // FIXED: Pass Google Meet data from webhook creation
       }
     );
 
@@ -222,6 +328,14 @@ async function handlePaymentSucceeded(
       console.error("Failed to create booking from payment:", createError);
       throw new Error(createError?.message || "Failed to create booking");
     }
+
+    console.log("🎉 Booking created successfully via webhook:", {
+      bookingId: createdBooking.booking.id,
+      bookingReference: createdBooking.booking.booking_reference,
+      meetingUrl: createdBooking.booking.meeting_url,
+      googleCalendarEventId: createdBooking.booking.google_calendar_event_id,
+      hasGoogleMeetData: !!googleMeetData,
+    });
 
     // Update the newly created booking with payment info
     const { data: finalBooking, error: updateError } = await supabase
@@ -261,7 +375,7 @@ async function handlePaymentSucceeded(
       scheduledTime: booking.scheduled_time,
       duration: booking.services.duration_minutes,
       price: booking.services.price,
-      meetingUrl: "https://meet.google.com/mgp-uzoc-hkz", // Your Google Meet link
+      meetingUrl: booking.meeting_url || "https://meet.google.com/mgp-uzoc-hkz", // Use dynamic Google Meet URL or fallback
     });
     console.log("✅ Payment confirmation email sent");
   } catch (emailError) {

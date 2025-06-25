@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useAuth } from "@/contexts/AuthContext";
 import Button from "@/components/ui/Button";
 import BookingManager from "@/components/dashboard/BookingManager";
+import GoogleIntegrationSettings from "@/components/dashboard/GoogleIntegrationSettings";
 
 export default function DashboardPage() {
   const { user, loading, signOut } = useAuth();
@@ -120,86 +121,109 @@ export default function DashboardPage() {
 
         {/* Dashboard Content */}
         {activeTab === "overview" && (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-12">
-            {/* Profile Card */}
-            <div className="bg-[#1e293b] bg-opacity-60 backdrop-blur-sm rounded-2xl p-6 border border-[#6bdcc0]/20 shadow-xl">
-              <h3 className="text-xl font-semibold text-white mb-4">
-                Profile Information
-              </h3>
-              <div className="space-y-3">
-                <div>
-                  <span className="text-gray-400 text-sm">Email:</span>
-                  <p className="text-white">{user.email}</p>
+          <div>
+            {/* Overview Cards */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-12">
+              {/* Profile Card */}
+              <div className="bg-[#1e293b] bg-opacity-60 backdrop-blur-sm rounded-2xl p-6 border border-[#6bdcc0]/20 shadow-xl">
+                <h3 className="text-xl font-semibold text-white mb-4">
+                  Profile Information
+                </h3>
+                <div className="space-y-3">
+                  <div>
+                    <span className="text-gray-400 text-sm">Email:</span>
+                    <p className="text-white">{user.email}</p>
+                  </div>
+                  <div>
+                    <span className="text-gray-400 text-sm">Full Name:</span>
+                    <p className="text-white">
+                      {user.user_metadata?.full_name || "Not provided"}
+                    </p>
+                  </div>
+                  <div>
+                    <span className="text-gray-400 text-sm">
+                      Account Created:
+                    </span>
+                    <p className="text-white">
+                      {new Date(user.created_at).toLocaleDateString()}
+                    </p>
+                  </div>
                 </div>
-                <div>
-                  <span className="text-gray-400 text-sm">Full Name:</span>
-                  <p className="text-white">
-                    {user.user_metadata?.full_name || "Not provided"}
-                  </p>
+              </div>
+
+              {/* Quick Actions Card */}
+              <div className="bg-[#1e293b] bg-opacity-60 backdrop-blur-sm rounded-2xl p-6 border border-[#6bdcc0]/20 shadow-xl">
+                <h3 className="text-xl font-semibold text-white mb-4">
+                  Quick Actions
+                </h3>
+                <div className="space-y-3">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="w-full"
+                    onClick={() => router.push("/booking")}
+                  >
+                    Book a Meeting
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="w-full"
+                    onClick={() => router.push("/")}
+                  >
+                    View Services
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="w-full"
+                    onClick={() => router.push("/profile")}
+                  >
+                    Edit Profile
+                  </Button>
                 </div>
-                <div>
-                  <span className="text-gray-400 text-sm">
-                    Account Created:
-                  </span>
-                  <p className="text-white">
-                    {new Date(user.created_at).toLocaleDateString()}
-                  </p>
+              </div>
+
+              {/* Account Status Card */}
+              <div className="bg-[#1e293b] bg-opacity-60 backdrop-blur-sm rounded-2xl p-6 border border-[#6bdcc0]/20 shadow-xl">
+                <h3 className="text-xl font-semibold text-white mb-4">
+                  Account Status
+                </h3>
+                <div className="space-y-3">
+                  <div className="flex items-center">
+                    <div className="w-3 h-3 bg-green-400 rounded-full mr-3"></div>
+                    <span className="text-white">Email Verified</span>
+                  </div>
+                  <div className="flex items-center">
+                    <div className="w-3 h-3 bg-green-400 rounded-full mr-3"></div>
+                    <span className="text-white">Account Active</span>
+                  </div>
+                  <div className="flex items-center">
+                    <div className="w-3 h-3 bg-blue-400 rounded-full mr-3"></div>
+                    <span className="text-white">
+                      {isStaff ? "Staff Member" : "Standard Plan"}
+                    </span>
+                  </div>
                 </div>
               </div>
             </div>
 
-            {/* Quick Actions Card */}
-            <div className="bg-[#1e293b] bg-opacity-60 backdrop-blur-sm rounded-2xl p-6 border border-[#6bdcc0]/20 shadow-xl">
-              <h3 className="text-xl font-semibold text-white mb-4">
-                Quick Actions
-              </h3>
-              <div className="space-y-3">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="w-full"
-                  onClick={() => router.push("/booking")}
-                >
-                  Book a Meeting
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="w-full"
-                  onClick={() => router.push("/")}
-                >
-                  View Services
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="w-full"
-                  onClick={() => router.push("/profile")}
-                >
-                  Edit Profile
-                </Button>
+            {/* Google Integration Settings for Staff */}
+            {isStaff && (
+              <div className="mb-12">
+                <h2 className="text-2xl font-bold text-white mb-6 text-center">
+                  🔗 Google Integration Settings
+                </h2>
+                <GoogleIntegrationSettings consultantId={user?.id || ""} />
               </div>
-            </div>
+            )}
 
-            {/* Account Status Card */}
-            <div className="bg-[#1e293b] bg-opacity-60 backdrop-blur-sm rounded-2xl p-6 border border-[#6bdcc0]/20 shadow-xl">
-              <h3 className="text-xl font-semibold text-white mb-4">
-                Account Status
-              </h3>
-              <div className="space-y-3">
-                <div className="flex items-center">
-                  <div className="w-3 h-3 bg-green-400 rounded-full mr-3"></div>
-                  <span className="text-white">Email Verified</span>
-                </div>
-                <div className="flex items-center">
-                  <div className="w-3 h-3 bg-green-400 rounded-full mr-3"></div>
-                  <span className="text-white">Account Active</span>
-                </div>
-                <div className="flex items-center">
-                  <div className="w-3 h-3 bg-blue-400 rounded-full mr-3"></div>
-                  <span className="text-white">Standard Plan</span>
-                </div>
-              </div>
+            {/* My Bookings Section for All Users */}
+            <div className="mb-12">
+              <h2 className="text-2xl font-bold text-white mb-6 text-center">
+                📅 My Bookings
+              </h2>
+              <BookingManager />
             </div>
 
             {/* Sign Out Section */}
@@ -213,7 +237,7 @@ export default function DashboardPage() {
 
         {/* Staff Booking Management Tab */}
         {isStaff && activeTab === "bookings" && (
-          <div>
+          <div className="max-w-6xl mx-auto">
             <BookingManager />
           </div>
         )}

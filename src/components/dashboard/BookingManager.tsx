@@ -9,6 +9,7 @@ interface Booking {
   booking_reference: string;
   scheduled_date: string;
   scheduled_time: string;
+  scheduled_datetime?: string;
   status:
     | "pending"
     | "confirmed"
@@ -38,6 +39,11 @@ interface Booking {
   created_at: string;
   payment_status: string;
   payment_amount?: number;
+  // Google Meet integration fields
+  meeting_url?: string;
+  meeting_platform?: string;
+  google_calendar_event_id?: string;
+  google_calendar_link?: string;
 }
 
 interface UserProfile {
@@ -188,6 +194,49 @@ export default function BookingManager() {
       return ASSIGNMENT_INDICATORS.auto;
     }
     return ASSIGNMENT_INDICATORS.others;
+  };
+
+  const getMeetingStatus = (booking: Booking) => {
+    const now = new Date();
+    const bookingDateTime = new Date(
+      booking.scheduled_datetime ||
+        `${booking.scheduled_date}T${booking.scheduled_time}:00`
+    );
+    const endDateTime = new Date(
+      bookingDateTime.getTime() + booking.service.duration_minutes * 60000
+    );
+
+    if (now < bookingDateTime) {
+      return { status: "upcoming", color: "text-blue-400", icon: "🕐" };
+    } else if (now >= bookingDateTime && now <= endDateTime) {
+      return { status: "active", color: "text-green-400", icon: "🔴" };
+    } else {
+      return { status: "past", color: "text-gray-400", icon: "✅" };
+    }
+  };
+
+  const getMeetingTimeStatus = (booking: Booking) => {
+    const now = new Date();
+    const bookingDateTime = new Date(
+      booking.scheduled_datetime ||
+        `${booking.scheduled_date}T${booking.scheduled_time}:00`
+    );
+    const diffMinutes = Math.floor(
+      (bookingDateTime.getTime() - now.getTime()) / 60000
+    );
+
+    if (diffMinutes <= 0) {
+      return { text: "Meeting time", urgent: false };
+    } else if (diffMinutes <= 15) {
+      return { text: `Starting in ${diffMinutes}m`, urgent: true };
+    } else if (diffMinutes <= 60) {
+      return { text: `Starting in ${diffMinutes}m`, urgent: false };
+    } else {
+      return {
+        text: `${Math.floor(diffMinutes / 60)}h ${diffMinutes % 60}m`,
+        urgent: false,
+      };
+    }
   };
 
   const formatDateTime = (date: string, time: string) => {
@@ -415,16 +464,16 @@ export default function BookingManager() {
               {bookingView === "my"
                 ? "👤"
                 : bookingView === "unassigned"
-                ? "❓"
-                : "📅"}
+                  ? "❓"
+                  : "📅"}
             </div>
             <p className="text-lg">
               No{" "}
               {bookingView === "my"
                 ? "assigned"
                 : bookingView === "unassigned"
-                ? "unassigned"
-                : ""}{" "}
+                  ? "unassigned"
+                  : ""}{" "}
               bookings found
             </p>
             {bookingView === "my" && (
@@ -448,8 +497,8 @@ export default function BookingManager() {
                   assignment === ASSIGNMENT_INDICATORS.mine
                     ? "border-[#6bdcc0]/40 hover:border-[#6bdcc0]/60"
                     : assignment === ASSIGNMENT_INDICATORS.unassigned
-                    ? "border-orange-500/40 hover:border-orange-500/60"
-                    : "border-[#6bdcc0]/20 hover:border-[#6bdcc0]/40"
+                      ? "border-orange-500/40 hover:border-orange-500/60"
+                      : "border-[#6bdcc0]/20 hover:border-[#6bdcc0]/40"
                 }`}
                 onClick={() => {
                   setSelectedBooking(booking);
@@ -508,21 +557,71 @@ export default function BookingManager() {
                       </div>
 
                       <div>
-                        <span className="text-gray-400">Assignment:</span>
-                        <p className={`font-medium ${assignment.color}`}>
-                          {booking.consultant
-                            ? `${booking.consultant.first_name} ${booking.consultant.last_name}`
-                            : "Unassigned"}
-                        </p>
-                        <p className="text-gray-300">
-                          {booking.payment_amount
-                            ? `$${booking.payment_amount}`
-                            : "Free"}
-                        </p>
+                        <span className="text-gray-400">Meeting:</span>
+                        {(() => {
+                          const meetingStatus = getMeetingStatus(booking);
+                          const timeStatus = getMeetingTimeStatus(booking);
+                          return (
+                            <>
+                              <p
+                                className={`font-medium ${meetingStatus.color}`}
+                              >
+                                {meetingStatus.icon} {meetingStatus.status}
+                              </p>
+                              <p
+                                className={`text-sm ${
+                                  timeStatus.urgent
+                                    ? "text-orange-400 animate-pulse"
+                                    : "text-gray-300"
+                                }`}
+                              >
+                                {timeStatus.text}
+                              </p>
+                            </>
+                          );
+                        })()}
                       </div>
                     </div>
                   </div>
                 </div>
+
+                {/* Meeting Action Buttons */}
+                {booking.meeting_url && (
+                  <div className="mt-4 pt-4 border-t border-gray-600/30 flex gap-2">
+                    <a
+                      href={booking.meeting_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm font-medium transition-colors flex items-center gap-2"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      🎥 Join Meeting
+                    </a>
+                    {booking.google_calendar_link && (
+                      <a
+                        href={booking.google_calendar_link}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors flex items-center gap-2"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        📅 Calendar
+                      </a>
+                    )}
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        navigator.clipboard.writeText(
+                          booking.meeting_url || ""
+                        );
+                        toast.success("Meeting URL copied to clipboard!");
+                      }}
+                      className="px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded-lg text-sm font-medium transition-colors flex items-center gap-2"
+                    >
+                      📋 Copy URL
+                    </button>
+                  </div>
+                )}
               </div>
             );
           })
@@ -645,6 +744,97 @@ export default function BookingManager() {
                         ? `${selectedBooking.consultant.first_name} ${selectedBooking.consultant.last_name}`
                         : "Unassigned"}
                     </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Meeting Information */}
+              <div>
+                <h4 className="text-lg font-semibold text-[#6bdcc0] mb-3">
+                  Meeting Information
+                </h4>
+                <div className="space-y-3">
+                  {/* Meeting Status */}
+                  <div className="flex items-center gap-3">
+                    {(() => {
+                      const meetingStatus = getMeetingStatus(selectedBooking);
+                      const timeStatus = getMeetingTimeStatus(selectedBooking);
+                      return (
+                        <>
+                          <span
+                            className={`px-3 py-1 rounded-full text-sm border border-current ${meetingStatus.color}`}
+                          >
+                            {meetingStatus.icon} {meetingStatus.status}
+                          </span>
+                          <span
+                            className={`text-sm ${
+                              timeStatus.urgent
+                                ? "text-orange-400 font-semibold"
+                                : "text-gray-300"
+                            }`}
+                          >
+                            {timeStatus.text}
+                          </span>
+                        </>
+                      );
+                    })()}
+                  </div>
+
+                  {/* Meeting Platform */}
+                  <div>
+                    <span className="text-gray-400">Platform:</span>
+                    <span className="text-white ml-2">
+                      {selectedBooking.meeting_platform || "Google Meet"}
+                      {selectedBooking.google_calendar_event_id &&
+                        " (Google Calendar)"}
+                    </span>
+                  </div>
+
+                  {/* Meeting URL */}
+                  {selectedBooking.meeting_url && (
+                    <div>
+                      <span className="text-gray-400">Meeting URL:</span>
+                      <div className="mt-1 flex items-center gap-2">
+                        <span className="text-white text-sm font-mono bg-[#1e293b] px-2 py-1 rounded truncate max-w-xs">
+                          {selectedBooking.meeting_url}
+                        </span>
+                        <button
+                          onClick={() => {
+                            navigator.clipboard.writeText(
+                              selectedBooking.meeting_url || ""
+                            );
+                            toast.success("Meeting URL copied to clipboard!");
+                          }}
+                          className="px-2 py-1 bg-gray-600 hover:bg-gray-700 text-white rounded text-xs"
+                        >
+                          Copy
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Meeting Actions */}
+                  <div className="flex gap-2 pt-2">
+                    {selectedBooking.meeting_url && (
+                      <a
+                        href={selectedBooking.meeting_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm font-medium transition-colors flex items-center gap-2"
+                      >
+                        🎥 Join Meeting
+                      </a>
+                    )}
+                    {selectedBooking.google_calendar_link && (
+                      <a
+                        href={selectedBooking.google_calendar_link}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors flex items-center gap-2"
+                      >
+                        📅 Open Calendar
+                      </a>
+                    )}
                   </div>
                 </div>
               </div>

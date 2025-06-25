@@ -4,6 +4,8 @@ import {
 } from "@/lib/supabase-server";
 import { NextRequest, NextResponse } from "next/server";
 import { sendBookingConfirmationEmail } from "@/lib/email-service";
+import { googleCalendarSimpleService } from "@/lib/google-calendar-simple";
+import type { CreateMeetingParams } from "@/lib/google-calendar-simple";
 
 // Helper function to check if user is staff
 async function isStaff(
@@ -112,7 +114,76 @@ export async function POST(request: NextRequest) {
       email: customerMetrics.email,
     });
 
-    // FIXED: Use atomic booking creation function to prevent race conditions
+    // 🚀 PRE-CREATE GOOGLE MEET MEETING FOR CONSULTANT
+    let googleMeetData = null;
+    let assignedConsultant = null;
+
+    // First, get the optimal consultant assignment
+    const { data: consultantAssignment } = await supabase.rpc(
+      "get_optimal_consultant_assignment",
+      {
+        target_date: scheduledDate,
+        target_time: scheduledTime,
+        service_id_param: serviceId,
+        assignment_strategy_param: assignmentStrategy || "optimal",
+      }
+    );
+
+    if (consultantAssignment && consultantAssignment.length > 0) {
+      assignedConsultant = consultantAssignment[0];
+      console.log("🎯 Assigned consultant:", {
+        id: assignedConsultant.consultant_id,
+        name: assignedConsultant.consultant_name,
+      });
+
+      // Try to create Google Meet meeting for the assigned consultant
+      try {
+        const startDateTime = new Date(`${scheduledDate}T${scheduledTime}:00`);
+        const endDateTime = new Date(
+          startDateTime.getTime() + service.duration_minutes * 60000
+        );
+
+        const meetingParams: CreateMeetingParams = {
+          consultantId: assignedConsultant.consultant_id,
+          bookingId: "temp_" + Date.now(), // Temporary ID, will be updated later
+          customerName: `${customerData.firstName} ${customerData.lastName}`,
+          customerEmail: customerData.email,
+          consultantEmail: assignedConsultant.consultant_email || "",
+          serviceName: service.name,
+          startTime: startDateTime.toISOString(),
+          endTime: endDateTime.toISOString(),
+          timezone: "UTC",
+        };
+
+        console.log("📅 Creating Google Meet with params:", meetingParams);
+
+        const meetingDetails =
+          await googleCalendarSimpleService.createConsultationMeeting(
+            meetingParams
+          );
+
+        if (meetingDetails) {
+          googleMeetData = {
+            meeting_url: meetingDetails.meetingUrl,
+            google_calendar_event_id: meetingDetails.calendarEventId,
+            google_calendar_link: meetingDetails.calendarLink,
+          };
+
+          console.log("✅ Google Meet created successfully:", {
+            meetingUrl: meetingDetails.meetingUrl,
+            eventId: meetingDetails.calendarEventId,
+            calendarLink: meetingDetails.calendarLink,
+          });
+        } else {
+          console.log("⚠️ Google Meet creation returned null, using fallback");
+        }
+      } catch (googleError) {
+        console.error("❌ Error creating Google Meet:", googleError);
+        console.log("⚠️ Will use fallback meeting URL");
+      }
+    }
+
+    // FIXED: Use atomic booking creation function with Google Meet data
     const { data: bookingResult, error: bookingError } = await supabase.rpc(
       "create_booking_with_availability_check",
       {
@@ -135,6 +206,7 @@ export async function POST(request: NextRequest) {
           customerData.company,
           projectDescription
         ),
+        google_meet_data_param: googleMeetData,
       }
     );
 
@@ -165,6 +237,17 @@ export async function POST(request: NextRequest) {
     const booking = bookingResult.booking;
     const consultant = bookingResult.consultant;
 
+    console.log("📋 Booking created successfully:", {
+      id: booking.id,
+      bookingReference: booking.booking_reference,
+      status: booking.status,
+      meetingUrl: booking.meeting_url,
+      meetingPlatform: booking.meeting_platform,
+      googleCalendarEventId: booking.google_calendar_event_id,
+      consultantId: consultant.consultant_id,
+      consultantName: consultant.consultant_name,
+    });
+
     // Send confirmation email for all bookings (free and paid)
     try {
       // Format the scheduled time properly
@@ -186,7 +269,7 @@ export async function POST(request: NextRequest) {
         scheduledTime: scheduledTimeFormatted,
         duration: service.duration_minutes,
         price: service.requires_payment ? service.price : undefined,
-        meetingUrl: "https://meet.google.com/mgp-uzoc-hkz",
+        meetingUrl: booking.meeting_url, // Uses Google Meet URL from booking or fallback
       });
       console.log("✅ Booking confirmation email sent successfully");
     } catch (emailError) {
