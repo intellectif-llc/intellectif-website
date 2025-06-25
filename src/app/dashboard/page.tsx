@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation";
 import { useAuth } from "@/contexts/AuthContext";
 import Button from "@/components/ui/Button";
 import BookingManager from "@/components/dashboard/BookingManager";
-import GoogleIntegrationSettings from "@/components/dashboard/GoogleIntegrationSettings";
 
 export default function DashboardPage() {
   const { user, loading, signOut } = useAuth();
@@ -207,16 +206,6 @@ export default function DashboardPage() {
                 </div>
               </div>
             </div>
-
-            {/* Google Integration Settings for Staff */}
-            {isStaff && (
-              <div className="mb-12">
-                <h2 className="text-2xl font-bold text-white mb-6 text-center">
-                  🔗 Google Integration Settings
-                </h2>
-                <GoogleIntegrationSettings consultantId={user?.id || ""} />
-              </div>
-            )}
 
             {/* My Bookings Section for All Users */}
             <div className="mb-12">

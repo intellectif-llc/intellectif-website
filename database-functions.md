@@ -252,32 +252,23 @@ CREATE OR REPLACE FUNCTION public.create_booking_with_availability_check(
     customer_data_param jsonb,
     project_description_param text,
     assignment_strategy_param text DEFAULT 'optimal'::text,
-    lead_score_param smallint DEFAULT 0,
-    google_meet_data_param jsonb DEFAULT NULL
+    lead_score_param smallint DEFAULT 0
 )
  RETURNS jsonb
  LANGUAGE plpgsql
  SECURITY DEFINER
 AS $function$
 DECLARE
-    -- Function-specific variables
+    -- Kept from original function
     service_rec RECORD;
     consultant_assignment RECORD;
     booking_rec RECORD;
+    booking_reference_val VARCHAR(20);
 
-    -- Variables for derived values
-    booking_reference_val character varying; -- CORRECTED: Type now matches table schema
-    found_user_id uuid; -- NEW: To store the ID of a registered user if found
-
-    -- Meeting-related variables with proper data types matching schema
-    meeting_url_val text;
-    meeting_platform_val character varying;
-    meeting_id_val character varying;
-    meeting_password_val character varying;
-    google_calendar_event_id_val text;
-    google_calendar_link_val text;
+    -- ADDED: Improvement from the newer function to hold the linked user's ID
+    found_user_id uuid;
 BEGIN
-    -- Input validation
+    -- ADDED: Kept robust input validation from the newer function
     IF service_id_param IS NULL OR customer_metrics_id_param IS NULL OR
        customer_data_param IS NULL OR project_description_param IS NULL OR
        scheduled_date_param IS NULL OR scheduled_time_param IS NULL OR
@@ -285,21 +276,21 @@ BEGIN
         RETURN json_build_object('success', false, 'error', 'Required parameters, including a customer email, cannot be null');
     END IF;
 
-    -- NEW ATOMIC STEP 1: Find registered user by email to link the booking
-    -- This professionally handles both guest and registered user bookings.
-    -- If no user is found, found_user_id will be NULL, which is the correct state for a guest booking.
+    -- ADDED: This is the core improvement you wanted to keep.
+    -- It finds a registered user by email to link the booking. If no user is found,
+    -- found_user_id remains NULL, which is the correct state for a guest booking.
     SELECT id INTO found_user_id
     FROM auth.users
     WHERE email = customer_data_param->>'email'
     LIMIT 1;
 
-    -- Get service details
+    -- ADDED: Kept improved service check from newer function (includes is_active)
     SELECT * INTO service_rec FROM services WHERE id = service_id_param AND is_active = true;
     IF NOT FOUND THEN
         RETURN json_build_object('success', false, 'error', 'Service not found or inactive');
     END IF;
 
-    -- ATOMIC STEP 2: Get consultant assignment
+    -- Kept from original: Get consultant assignment
     SELECT * INTO consultant_assignment
     FROM get_optimal_consultant_assignment(
         scheduled_date_param,
@@ -309,7 +300,6 @@ BEGIN
     )
     LIMIT 1;
 
-    -- If no consultant available, return error immediately
     IF consultant_assignment IS NULL THEN
         RETURN json_build_object(
             'success', false,
@@ -317,7 +307,7 @@ BEGIN
         );
     END IF;
 
-    -- ATOMIC STEP 3: Double-check availability hasn't changed (race condition protection)
+    -- Kept from original: Double-check availability (race condition protection)
     IF NOT EXISTS (
         SELECT 1 FROM get_available_consultants_with_buffer(
             scheduled_date_param,
@@ -333,27 +323,10 @@ BEGIN
         );
     END IF;
 
-    -- Generate booking reference
+    -- Kept from original: Generate booking reference
     booking_reference_val := generate_booking_reference();
 
-    -- Extract Google Meet data if provided, otherwise set to NULL
-    IF google_meet_data_param IS NOT NULL AND jsonb_typeof(google_meet_data_param) = 'object' THEN
-        meeting_url_val := google_meet_data_param->>'meeting_url';
-        meeting_platform_val := COALESCE(google_meet_data_param->>'meeting_platform', 'google_meet');
-        meeting_id_val := google_meet_data_param->>'meeting_id';
-        meeting_password_val := google_meet_data_param->>'meeting_password';
-        google_calendar_event_id_val := google_meet_data_param->>'google_calendar_event_id';
-        google_calendar_link_val := google_meet_data_param->>'google_calendar_link';
-    ELSE
-        meeting_url_val := NULL;
-        meeting_platform_val := NULL;
-        meeting_id_val := NULL;
-        meeting_password_val := NULL;
-        google_calendar_event_id_val := NULL;
-        google_calendar_link_val := NULL;
-    END IF;
-
-    -- ATOMIC STEP 4: Create the booking, now with the user_id correctly linked if they are registered
+    -- MODIFIED INSERT: Based on the original, but with the 'user_id' column added.
     INSERT INTO bookings (
         user_id, -- ADDED: Link to the registered user if found
         booking_reference,
@@ -370,16 +343,10 @@ BEGIN
         payment_amount,
         lead_score,
         booking_source,
-        meeting_platform,
-        meeting_url,
-        meeting_id,
-        meeting_password,
-        google_calendar_event_id,
-        google_calendar_link,
         created_at,
         updated_at
     ) VALUES (
-        found_user_id, -- ADDED: Value can be UUID or NULL
+        found_user_id, -- ADDED: Value can be the user's UUID or NULL for guests
         booking_reference_val,
         service_id_param,
         scheduled_date_param,
@@ -394,18 +361,12 @@ BEGIN
         service_rec.price,
         lead_score_param,
         'website_booking'::lead_source_enum,
-        meeting_platform_val,
-        meeting_url_val,
-        meeting_id_val,
-        meeting_password_val,
-        google_calendar_event_id_val,
-        google_calendar_link_val,
         NOW(),
         NOW()
     )
     RETURNING * INTO booking_rec;
 
-    -- Return success with comprehensive booking and consultant details
+    -- MODIFIED RETURN: Based on the original, but adds the 'user_id' for confirmation.
     RETURN json_build_object(
         'success', true,
         'booking', json_build_object(
@@ -417,11 +378,6 @@ BEGIN
             'payment_status', booking_rec.payment_status,
             'payment_amount', booking_rec.payment_amount,
             'follow_up_required', booking_rec.follow_up_required,
-            'meeting_url', booking_rec.meeting_url,
-            'meeting_platform', booking_rec.meeting_platform,
-            'meeting_id', booking_rec.meeting_id,
-            'google_calendar_event_id', booking_rec.google_calendar_event_id,
-            'google_calendar_link', booking_rec.google_calendar_link,
             'service', json_build_object(
                 'id', service_rec.id,
                 'name', service_rec.name,
@@ -438,6 +394,7 @@ BEGIN
     );
 
 EXCEPTION
+    -- ADDED: Kept enhanced error reporting from the newer function
     WHEN others THEN
         RETURN json_build_object(
             'success', false,

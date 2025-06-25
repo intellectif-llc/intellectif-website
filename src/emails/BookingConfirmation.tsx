@@ -34,7 +34,7 @@ export default function BookingConfirmation({
   scheduledTime = "10:00 AM EST",
   duration = 60,
   price,
-  meetingUrl = "https://meet.google.com/mgp-uzoc-hkz",
+  meetingUrl,
   companyName = "Intellectif",
   supportEmail = "admin@intellectif.com",
   logoUrl = `${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/logo.png`,

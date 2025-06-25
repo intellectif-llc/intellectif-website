@@ -4,8 +4,8 @@ import {
 } from "@/lib/supabase-server";
 import { NextRequest, NextResponse } from "next/server";
 import { sendBookingConfirmationEmail } from "@/lib/email-service";
-import { googleCalendarSimpleService } from "@/lib/google-calendar-simple";
-import type { CreateMeetingParams } from "@/lib/google-calendar-simple";
+import { SimpleMeetingService } from "@/lib/simple-meeting-service";
+import type { CreateMeetingOptions } from "@/lib/simple-meeting-service";
 
 // Helper function to check if user is staff
 async function isStaff(
@@ -136,50 +136,41 @@ export async function POST(request: NextRequest) {
         name: assignedConsultant.consultant_name,
       });
 
-      // Try to create Google Meet meeting for the assigned consultant
+      // Create simple meeting space for the booking
       try {
-        const startDateTime = new Date(`${scheduledDate}T${scheduledTime}:00`);
-        const endDateTime = new Date(
-          startDateTime.getTime() + service.duration_minutes * 60000
-        );
-
-        const meetingParams: CreateMeetingParams = {
-          consultantId: assignedConsultant.consultant_id,
+        const meetingOptions: CreateMeetingOptions = {
           bookingId: "temp_" + Date.now(), // Temporary ID, will be updated later
           customerName: `${customerData.firstName} ${customerData.lastName}`,
-          customerEmail: customerData.email,
-          consultantEmail: assignedConsultant.consultant_email || "",
           serviceName: service.name,
-          startTime: startDateTime.toISOString(),
-          endTime: endDateTime.toISOString(),
-          timezone: "UTC",
+          scheduledDateTime: new Date(
+            `${scheduledDate}T${scheduledTime}:00`
+          ).toISOString(),
         };
 
-        console.log("📅 Creating Google Meet with params:", meetingParams);
+        console.log("🎯 Creating simple meeting space:", meetingOptions);
 
         const meetingDetails =
-          await googleCalendarSimpleService.createConsultationMeeting(
-            meetingParams
-          );
+          await SimpleMeetingService.createMeeting(meetingOptions);
 
         if (meetingDetails) {
           googleMeetData = {
-            meeting_url: meetingDetails.meetingUrl,
-            google_calendar_event_id: meetingDetails.calendarEventId,
-            google_calendar_link: meetingDetails.calendarLink,
+            meeting_url: meetingDetails.meeting_url,
+            meeting_platform: meetingDetails.meeting_platform,
+            meeting_id: meetingDetails.meeting_id,
+            meeting_password: meetingDetails.meeting_password,
           };
 
-          console.log("✅ Google Meet created successfully:", {
-            meetingUrl: meetingDetails.meetingUrl,
-            eventId: meetingDetails.calendarEventId,
-            calendarLink: meetingDetails.calendarLink,
+          console.log("✅ Meeting space created successfully:", {
+            meetingUrl: meetingDetails.meeting_url,
+            platform: meetingDetails.meeting_platform,
+            meetingId: meetingDetails.meeting_id,
           });
         } else {
-          console.log("⚠️ Google Meet creation returned null, using fallback");
+          console.log("⚠️ Meeting creation returned null");
         }
-      } catch (googleError) {
-        console.error("❌ Error creating Google Meet:", googleError);
-        console.log("⚠️ Will use fallback meeting URL");
+      } catch (meetingError) {
+        console.error("❌ Error creating meeting space:", meetingError);
+        console.log("⚠️ Booking will be created without meeting URL");
       }
     }
 

@@ -21,6 +21,23 @@ AWS_SES_CONFIGURATION_SET=your_configuration_set_name
 NEXT_PUBLIC_TURNSTILE_SITE_KEY=your_turnstile_site_key
 TURNSTILE_SECRET_KEY=your_turnstile_secret_key
 
+# Google Integration (Corporate Service Account - Recommended)
+GOOGLE_SERVICE_ACCOUNT_EMAIL=your-service-account@your-project.iam.gserviceaccount.com
+GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\nYOUR_PRIVATE_KEY_HERE\n-----END PRIVATE KEY-----"
+
+# Google Integration (OAuth - Alternative, requires individual user connections)
+NEXT_PUBLIC_GOOGLE_CLIENT_ID=your_google_client_id
+GOOGLE_CLIENT_SECRET=your_google_client_secret
+
 # Application Settings
 NEXT_PUBLIC_APP_URL=http://localhost:3000
-NODE_ENV=development 
+NEXT_PUBLIC_SITE_URL=http://localhost:3000
+NODE_ENV=development
+
+# Simple Meeting Provider (Choose one - no API keys required)
+# Default: Jitsi Meet (Free, works immediately)
+MEETING_PROVIDER=jitsi
+
+# Alternative Options:
+# MEETING_PROVIDER=whereby
+# MEETING_PROVIDER=google_meet_simple 

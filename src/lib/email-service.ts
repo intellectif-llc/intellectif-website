@@ -36,12 +36,10 @@ function formatEmailDate(dateString: string): string {
 // Helper function to get environment-based email config
 function getEmailConfig() {
   return {
-    companyName: process.env.NEXT_PUBLIC_COMPANY_NAME || "Intellectif",
-    companyWebsite:
-      process.env.NEXT_PUBLIC_COMPANY_WEBSITE || "https://intellectif.com",
-    supportEmail: process.env.EMAIL_SUPPORT || "admin@intellectif.com",
-    logoUrl: `${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/logo.png`,
-    defaultMeetingUrl: "https://meet.google.com/mgp-uzoc-hkz",
+    fromEmail: process.env.AWS_SES_FROM_EMAIL || "hello@intellectif.com",
+    companyName: "Intellectif",
+    companyWebsite: "https://intellectif.com",
+    supportEmail: "admin@intellectif.com",
   };
 }
 
@@ -59,12 +57,11 @@ export async function sendBookingConfirmationEmail(data: BookingEmailData) {
         scheduledTime: data.scheduledTime,
         duration: data.duration,
         price: data.price,
-        meetingUrl: data.meetingUrl || config.defaultMeetingUrl,
+        meetingUrl: data.meetingUrl,
         // Pass environment-based values
         companyName: config.companyName,
         companyWebsite: config.companyWebsite,
         supportEmail: config.supportEmail,
-        logoUrl: config.logoUrl,
       })
     );
 
@@ -82,7 +79,7 @@ Booking Details:
 - Duration: ${data.duration} minutes
 ${data.price ? `- Amount Paid: $${data.price.toFixed(2)} USD` : ""}
 
-Meeting Link: ${data.meetingUrl || config.defaultMeetingUrl}
+Meeting Link: ${data.meetingUrl}
 
 We'll send you a reminder 24 hours before your appointment.
 
@@ -130,12 +127,11 @@ export async function sendPaymentConfirmationEmail(data: BookingEmailData) {
         scheduledTime: data.scheduledTime,
         duration: data.duration,
         price: data.price,
-        meetingUrl: data.meetingUrl || config.defaultMeetingUrl,
+        meetingUrl: data.meetingUrl,
         // Pass environment-based values
         companyName: config.companyName,
         companyWebsite: config.companyWebsite,
         supportEmail: config.supportEmail,
-        logoUrl: config.logoUrl,
       })
     );
 
@@ -153,7 +149,7 @@ Booking Details:
 - Time: ${data.scheduledTime}
 - Duration: ${data.duration} minutes
 
-Meeting Link: ${data.meetingUrl || config.defaultMeetingUrl}
+Meeting Link: ${data.meetingUrl}
 
 Thank you for choosing ${config.companyName}!
 The ${config.companyName} Team
