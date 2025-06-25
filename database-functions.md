@@ -1228,3 +1228,15 @@ EXCEPTION
 END;
 $function$
 ```
+
+## 22. Google functions
+
+-- Secure token storage/retrieval functions (SECURITY DEFINER)
+CREATE OR REPLACE FUNCTION private.store_google_refresh_token(
+p_user_id UUID,
+p_refresh_token TEXT
+) RETURNS VOID;
+
+CREATE OR REPLACE FUNCTION private.get_decrypted_google_refresh_token(
+p_user_id UUID
+) RETURNS TEXT;

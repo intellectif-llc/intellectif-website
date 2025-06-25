@@ -861,3 +861,22 @@ created_at timestamp with time zone NOT NULL DEFAULT now(),
 CONSTRAINT voice_consultations_pkey PRIMARY KEY (id),
 CONSTRAINT voice_consultations_follow_up_booking_id_fkey FOREIGN KEY (follow_up_booking_id) REFERENCES public.bookings(id)
 );
+
+-- Store Google OAuth tokens securely
+CREATE TABLE public.user_tokens (
+user_id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+encrypted_google_refresh_token BYTEA NOT NULL,
+google_calendar_id TEXT, -- Primary calendar ID
+token_created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+token_expires_at TIMESTAMPTZ,
+created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- Enhanced booking table
+ALTER TABLE public.bookings
+ADD COLUMN google_calendar_event_id TEXT,
+ADD COLUMN google_calendar_link TEXT,
+ADD COLUMN meeting_recording_url TEXT,
+ADD COLUMN meeting_transcript TEXT,
+ADD COLUMN ai_insights JSONB;
