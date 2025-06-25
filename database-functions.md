@@ -1122,21 +1122,35 @@ AS $function$
 DECLARE
   result JSON;
   affected_rows INTEGER;
+  final_first_name TEXT;
+  final_last_name TEXT;
+  final_full_name TEXT;
+  current_meta_data JSONB;
 BEGIN
   -- Validate input
   IF user_id IS NULL THEN
     RETURN json_build_object('success', false, 'error', 'User ID is required');
   END IF;
 
-  -- Update auth.users metadata and phone
+  -- Get current metadata to preserve existing values
+  SELECT raw_user_meta_data INTO current_meta_data FROM auth.users WHERE id = user_id;
+
+  -- Determine final names to use for updates
+  final_first_name := COALESCE(first_name_param, current_meta_data->>'first_name', '');
+  final_last_name := COALESCE(last_name_param, current_meta_data->>'last_name', '');
+  final_full_name := TRIM(final_first_name || ' ' || final_last_name);
+
+  -- Update auth.users metadata and phone, ensuring full_name is in sync
   UPDATE auth.users
   SET
     raw_user_meta_data = COALESCE(raw_user_meta_data, '{}'::jsonb) ||
       jsonb_build_object(
-        'first_name', COALESCE(first_name_param, raw_user_meta_data->>'first_name', ''),
-        'last_name', COALESCE(last_name_param, raw_user_meta_data->>'last_name', ''),
-        'company', COALESCE(company_param, raw_user_meta_data->>'company', ''),
-        'timezone', COALESCE(timezone_param, raw_user_meta_data->>'timezone', 'UTC')
+        'first_name', final_first_name,
+        'last_name', final_last_name,
+        'full_name', final_full_name,
+        'company', COALESCE(company_param, current_meta_data->>'company', ''),
+        'timezone', COALESCE(timezone_param, current_meta_data->>'timezone', 'UTC'),
+        'phone', COALESCE(phone_param, phone)
       ),
     phone = COALESCE(phone_param, phone),
     updated_at = NOW()
@@ -1148,7 +1162,7 @@ BEGIN
     RETURN json_build_object('success', false, 'error', 'User not found in auth.users');
   END IF;
 
-  -- Update or insert into profiles table with FIXED logic
+  -- Update or insert into profiles table
   INSERT INTO profiles (
     id,
     first_name,
@@ -1161,8 +1175,8 @@ BEGIN
   )
   VALUES (
     user_id,
-    COALESCE(first_name_param, ''),
-    COALESCE(last_name_param, ''),
+    final_first_name,
+    final_last_name,
     COALESCE(company_param, ''),
     COALESCE(timezone_param, 'UTC'),
     COALESCE(preferred_contact_method_param, 'email'::contact_method),
@@ -1170,7 +1184,6 @@ BEGIN
     NOW()
   )
   ON CONFLICT (id) DO UPDATE SET
-    -- 🔧 FIXED: Use CASE WHEN instead of COALESCE to properly handle NULL vs provided values
     first_name = CASE
       WHEN first_name_param IS NOT NULL THEN first_name_param
       ELSE profiles.first_name
@@ -1195,29 +1208,13 @@ BEGIN
       WHEN marketing_consent_param IS NOT NULL THEN marketing_consent_param
       ELSE profiles.marketing_consent
     END,
-    updated_at = NOW()
-  WHERE
-    -- 🔧 FIXED: Check parameters directly instead of EXCLUDED values
-    first_name_param IS NOT NULL OR
-    last_name_param IS NOT NULL OR
-    company_param IS NOT NULL OR
-    timezone_param IS NOT NULL OR
-    preferred_contact_method_param IS NOT NULL OR
-    marketing_consent_param IS NOT NULL;
+    updated_at = NOW();
 
-  -- Return success result with debug info
+  -- Return success result
   SELECT json_build_object(
     'success', true,
     'user_id', user_id,
-    'updated_at', NOW(),
-    'parameters_received', json_build_object(
-      'first_name_param', first_name_param IS NOT NULL,
-      'last_name_param', last_name_param IS NOT NULL,
-      'company_param', company_param IS NOT NULL,
-      'timezone_param', timezone_param IS NOT NULL,
-      'preferred_contact_method_param', preferred_contact_method_param IS NOT NULL,
-      'marketing_consent_param', marketing_consent_param IS NOT NULL
-    )
+    'updated_at', NOW()
   ) INTO result;
 
   RETURN result;

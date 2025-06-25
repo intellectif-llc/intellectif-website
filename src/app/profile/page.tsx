@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { PhoneInput } from "react-international-phone";
 import "react-international-phone/style.css";
+import { toast } from "react-hot-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { createClientComponentClient } from "@/lib/supabase";
 import Button from "@/components/ui/Button";
@@ -19,8 +20,6 @@ export default function ProfilePage() {
   const [company, setCompany] = useState("");
   const [timezone, setTimezone] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState("");
-  const [success, setSuccess] = useState("");
   const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
 
   const router = useRouter();
@@ -62,8 +61,8 @@ export default function ProfilePage() {
               );
             }
 
-            // Phone from auth.users metadata (to avoid SMS provider requirement)
-            setPhone(user.user_metadata?.phone || "");
+            // Phone number from the canonical source first, then fallback to metadata
+            setPhone(user.phone || user.user_metadata?.phone || "");
           } catch (error) {
             console.error("Error loading profile data:", error);
             // Fallback to auth.users metadata
@@ -72,7 +71,7 @@ export default function ProfilePage() {
             ).split(" ");
             setFirstName(firstName || "");
             setLastName(lastNameParts.join(" ") || "");
-            setPhone(user.user_metadata?.phone || "");
+            setPhone(user.phone || user.user_metadata?.phone || "");
             setCompany(user.user_metadata?.company || "");
             setTimezone(getTimezoneWithFallback(user.user_metadata?.timezone));
           }
@@ -86,13 +85,10 @@ export default function ProfilePage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    // Reset messages
-    setError("");
-    setSuccess("");
-
     // Validation
     if (!firstName.trim() || !lastName.trim()) {
-      setError("First name and last name are required");
+      toast.error("First name and last name are required");
+      setIsLoading(false);
       return;
     }
 
@@ -100,21 +96,20 @@ export default function ProfilePage() {
 
     try {
       const { error } = await updateProfile({
-        full_name: `${firstName.trim()} ${lastName.trim()}`.trim(),
+        first_name: firstName.trim(),
+        last_name: lastName.trim(),
         phone: phone.trim(),
         company: company.trim(),
         timezone: timezone.trim(),
       });
 
       if (error) {
-        setError(error.message);
+        toast.error(error.message);
       } else {
-        setSuccess("Profile updated successfully!");
-        // Clear success message after 3 seconds
-        setTimeout(() => setSuccess(""), 3000);
+        toast.success("Profile updated successfully!");
       }
     } catch (error) {
-      setError(
+      toast.error(
         error instanceof Error ? error.message : "An unexpected error occurred"
       );
     } finally {
@@ -388,49 +383,6 @@ export default function ProfilePage() {
                 </p>
               </div>
             </div>
-
-            {/* Success/Error Messages */}
-            {success && (
-              <div className="bg-green-500/10 border border-green-500/30 rounded-xl p-4">
-                <p className="text-green-400 text-sm flex items-center">
-                  <svg
-                    className="w-4 h-4 mr-2"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M5 13l4 4L19 7"
-                    />
-                  </svg>
-                  {success}
-                </p>
-              </div>
-            )}
-
-            {error && (
-              <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-4">
-                <p className="text-red-400 text-sm flex items-center">
-                  <svg
-                    className="w-4 h-4 mr-2"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M6 18L18 6M6 6l12 12"
-                    />
-                  </svg>
-                  {error}
-                </p>
-              </div>
-            )}
 
             {/* Action Buttons */}
             <div className="flex flex-col sm:flex-row gap-4 pt-6">

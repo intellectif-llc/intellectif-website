@@ -19,11 +19,12 @@ interface AuthContextType {
   signOut: () => Promise<{ error: AuthError | null }>;
   resetPassword: (email: string) => Promise<{ error: AuthError | null }>;
   updateProfile: (profileData: {
-    full_name?: string;
+    first_name?: string;
+    last_name?: string;
     phone?: string;
     company?: string;
     timezone?: string;
-  }) => Promise<{ error: AuthError | null }>;
+  }) => Promise<{ error: Error | null }>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -113,52 +114,34 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const updateProfile = async (profileData: {
-    full_name?: string;
+    first_name?: string;
+    last_name?: string;
     phone?: string;
     company?: string;
     timezone?: string;
   }) => {
     try {
-      // Parse full_name into first_name and last_name
-      const [firstName, ...lastNameParts] = (profileData.full_name || "").split(
-        " "
-      );
-      const lastName = lastNameParts.join(" ");
-
-      // Use our custom database function to update both auth.users and profiles
-      const { error: rpcError } = await supabase.rpc("update_user_profile", {
-        user_id: user?.id,
-        first_name_param: firstName || null,
-        last_name_param: lastName || null,
-        phone_param: profileData.phone || null,
-        company_param: profileData.company || null,
-        timezone_param: profileData.timezone || null,
+      const response = await fetch("/api/profile", {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(profileData),
       });
 
-      if (rpcError) {
-        // Convert PostgrestError to compatible error format
-        return {
-          error: {
-            message: rpcError.message,
-            name: "ProfileUpdateError",
-          } as unknown as AuthError,
-        };
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error || "Failed to update profile.");
       }
 
-      // Also update the auth.users metadata for compatibility (without phone to avoid SMS provider error)
-      const { error: authError } = await supabase.auth.updateUser({
-        data: {
-          first_name: firstName,
-          last_name: lastName,
-          company: profileData.company,
-          phone: profileData.phone, // Store phone in metadata instead of auth.users.phone
-          timezone: profileData.timezone, // Store timezone in metadata for consistency
-        },
-      });
+      // Manually trigger a user refresh to get the latest data.
+      // The onAuthStateChange listener will handle updating the user state.
+      await supabase.auth.refreshSession();
 
-      return { error: authError };
+      return { error: null };
     } catch (error) {
-      return { error: error as AuthError };
+      return { error: error as Error };
     }
   };
 
