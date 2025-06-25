@@ -702,9 +702,14 @@ updated_at timestamp with time zone NOT NULL DEFAULT now(),
 confirmed_at timestamp with time zone,
 completed_at timestamp with time zone,
 cancelled_at timestamp with time zone,
+google_calendar_event_id text,
+google_calendar_link text,
+meeting_recording_url text,
+meeting_transcript text,
+ai_insights jsonb,
 CONSTRAINT bookings_pkey PRIMARY KEY (id),
-CONSTRAINT bookings_service_id_fkey FOREIGN KEY (service_id) REFERENCES public.services(id),
 CONSTRAINT bookings_consultant_id_fkey FOREIGN KEY (consultant_id) REFERENCES auth.users(id),
+CONSTRAINT bookings_service_id_fkey FOREIGN KEY (service_id) REFERENCES public.services(id),
 CONSTRAINT bookings_customer_metrics_id_fkey FOREIGN KEY (customer_metrics_id) REFERENCES public.customer_metrics(id),
 CONSTRAINT bookings_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id)
 );
@@ -719,8 +724,8 @@ is_active boolean NOT NULL DEFAULT true,
 created_at timestamp with time zone NOT NULL DEFAULT now(),
 updated_at timestamp with time zone NOT NULL DEFAULT now(),
 CONSTRAINT consultant_buffer_preferences_pkey PRIMARY KEY (id),
-CONSTRAINT consultant_buffer_preferences_consultant_id_fkey FOREIGN KEY (consultant_id) REFERENCES auth.users(id),
-CONSTRAINT consultant_buffer_preferences_service_id_fkey FOREIGN KEY (service_id) REFERENCES public.services(id)
+CONSTRAINT consultant_buffer_preferences_service_id_fkey FOREIGN KEY (service_id) REFERENCES public.services(id),
+CONSTRAINT consultant_buffer_preferences_consultant_id_fkey FOREIGN KEY (consultant_id) REFERENCES auth.users(id)
 );
 CREATE TABLE public.customer_interactions (
 id uuid NOT NULL DEFAULT gen_random_uuid(),
@@ -733,9 +738,9 @@ staff_member uuid,
 value_score smallint DEFAULT 0 CHECK (value_score >= 0 AND value_score <= 100),
 conversion_potential USER-DEFINED NOT NULL DEFAULT 'unknown'::conversion_potential,
 CONSTRAINT customer_interactions_pkey PRIMARY KEY (id),
-CONSTRAINT customer_interactions_booking_id_fkey FOREIGN KEY (booking_id) REFERENCES public.bookings(id),
 CONSTRAINT customer_interactions_staff_member_fkey FOREIGN KEY (staff_member) REFERENCES public.profiles(id),
-CONSTRAINT customer_interactions_customer_metrics_id_fkey FOREIGN KEY (customer_metrics_id) REFERENCES public.customer_metrics(id)
+CONSTRAINT customer_interactions_customer_metrics_id_fkey FOREIGN KEY (customer_metrics_id) REFERENCES public.customer_metrics(id),
+CONSTRAINT customer_interactions_booking_id_fkey FOREIGN KEY (booking_id) REFERENCES public.bookings(id)
 );
 CREATE TABLE public.customer_metrics (
 id uuid NOT NULL DEFAULT gen_random_uuid(),
@@ -772,9 +777,9 @@ CREATE TABLE public.follow_ups (
   created_at timestamp with time zone NOT NULL DEFAULT now(),
   updated_at timestamp with time zone NOT NULL DEFAULT now(),
   CONSTRAINT follow_ups_pkey PRIMARY KEY (id),
-  CONSTRAINT follow_ups_assigned_to_fkey FOREIGN KEY (assigned_to) REFERENCES auth.users(id),
+  CONSTRAINT follow_ups_customer_metrics_id_fkey FOREIGN KEY (customer_metrics_id) REFERENCES public.customer_metrics(id),
   CONSTRAINT follow_ups_booking_id_fkey FOREIGN KEY (booking_id) REFERENCES public.bookings(id),
-  CONSTRAINT follow_ups_customer_metrics_id_fkey FOREIGN KEY (customer_metrics_id) REFERENCES public.customer_metrics(id)
+  CONSTRAINT follow_ups_assigned_to_fkey FOREIGN KEY (assigned_to) REFERENCES auth.users(id)
 );
 CREATE TABLE public.profiles (
   id uuid NOT NULL,
@@ -808,8 +813,8 @@ CREATE TABLE public.projects (
   created_at timestamp with time zone NOT NULL DEFAULT now(),
   updated_at timestamp with time zone NOT NULL DEFAULT now(),
   CONSTRAINT projects_pkey PRIMARY KEY (id),
-  CONSTRAINT projects_original_booking_id_fkey FOREIGN KEY (original_booking_id) REFERENCES public.bookings(id),
-  CONSTRAINT projects_customer_metrics_id_fkey FOREIGN KEY (customer_metrics_id) REFERENCES public.customer_metrics(id)
+  CONSTRAINT projects_customer_metrics_id_fkey FOREIGN KEY (customer_metrics_id) REFERENCES public.customer_metrics(id),
+  CONSTRAINT projects_original_booking_id_fkey FOREIGN KEY (original_booking_id) REFERENCES public.bookings(id)
 );
 CREATE TABLE public.services (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
@@ -846,6 +851,17 @@ error_message text,
 created_at timestamp with time zone DEFAULT now(),
 CONSTRAINT trigger_debug_log_pkey PRIMARY KEY (id)
 );
+CREATE TABLE public.user_tokens (
+user_id uuid NOT NULL,
+encrypted_google_refresh_token bytea NOT NULL,
+google_calendar_id text,
+token_created_at timestamp with time zone NOT NULL DEFAULT now(),
+token_expires_at timestamp with time zone,
+created_at timestamp with time zone NOT NULL DEFAULT now(),
+updated_at timestamp with time zone NOT NULL DEFAULT now(),
+CONSTRAINT user_tokens_pkey PRIMARY KEY (user_id),
+CONSTRAINT user_tokens_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id)
+);
 CREATE TABLE public.voice_consultations (
 id uuid NOT NULL DEFAULT gen_random_uuid(),
 customer_email character varying NOT NULL,
@@ -861,22 +877,3 @@ created_at timestamp with time zone NOT NULL DEFAULT now(),
 CONSTRAINT voice_consultations_pkey PRIMARY KEY (id),
 CONSTRAINT voice_consultations_follow_up_booking_id_fkey FOREIGN KEY (follow_up_booking_id) REFERENCES public.bookings(id)
 );
-
--- Store Google OAuth tokens securely
-CREATE TABLE public.user_tokens (
-user_id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
-encrypted_google_refresh_token BYTEA NOT NULL,
-google_calendar_id TEXT, -- Primary calendar ID
-token_created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-token_expires_at TIMESTAMPTZ,
-created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
--- Enhanced booking table
-ALTER TABLE public.bookings
-ADD COLUMN google_calendar_event_id TEXT,
-ADD COLUMN google_calendar_link TEXT,
-ADD COLUMN meeting_recording_url TEXT,
-ADD COLUMN meeting_transcript TEXT,
-ADD COLUMN ai_insights JSONB;
