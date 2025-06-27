@@ -9,15 +9,6 @@ export async function GET(request: NextRequest) {
   const type = searchParams.get("type") as EmailOtpType | null;
   const next = searchParams.get("next") ?? "/dashboard";
 
-  // Debug logging
-  console.log("=== AUTH CONFIRM DEBUG ===");
-  console.log("Full URL:", request.url);
-  console.log("Search params:", Object.fromEntries(searchParams.entries()));
-  console.log("token_hash:", token_hash);
-  console.log("type:", type);
-  console.log("next:", next);
-  console.log("========================");
-
   const redirectTo = request.nextUrl.clone();
   redirectTo.pathname = next;
 

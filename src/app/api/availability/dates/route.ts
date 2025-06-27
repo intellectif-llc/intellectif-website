@@ -9,12 +9,6 @@ export async function GET(request: NextRequest) {
     const serviceId = searchParams.get("service_id");
     const daysAhead = parseInt(searchParams.get("days_ahead") || "14");
 
-    console.log("🔍 DATES API - Request params:", {
-      serviceId,
-      daysAhead,
-      timestamp: new Date().toISOString(),
-    });
-
     // Get service duration for availability checking
     let serviceDuration = 60; // Default
     if (serviceId) {
