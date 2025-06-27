@@ -3,8 +3,10 @@ import { createServiceRoleClient } from "@/lib/supabase-server";
 import { stripe } from "@/lib/stripe-server";
 import { headers } from "next/headers";
 import { sendPaymentConfirmationEmail } from "@/lib/email-service";
-import { SimpleMeetingService } from "@/lib/simple-meeting-service";
-import type { CreateMeetingOptions } from "@/lib/simple-meeting-service";
+import {
+  GoogleMeetService,
+  type CreateMeetingOptions,
+} from "@/lib/google-meet-service";
 import type Stripe from "stripe";
 
 // Import helper function from bookings API
@@ -234,7 +236,7 @@ async function handlePaymentSucceeded(
             target_date: metadata.scheduledDate,
             target_time: metadata.scheduledTime,
             service_id_param: metadata.serviceId,
-            assignment_strategy_param: "optimal",
+            assignment_strategy: "optimal",
           });
 
         if (assignmentError) {
@@ -297,42 +299,51 @@ async function handlePaymentSucceeded(
             startDateTime.getTime() + service.duration_minutes * 60000
           );
 
-          const meetingOptions: CreateMeetingOptions = {
-            bookingId: "webhook_" + Date.now(), // Temporary ID for webhook
-            customerName: `${metadata.customerFirstName} ${metadata.customerLastName}`,
-            serviceName: service.name,
-            scheduledDateTime: startDateTime.toISOString(),
-          };
-
-          console.log(
-            "🎯 Creating simple meeting space via webhook:",
-            meetingOptions
+          // Check if consultant has Google account connected
+          const isConnected = await GoogleMeetService.isConsultantConnected(
+            assignedConsultant.consultant_id
           );
 
-          const meetingDetails =
-            await SimpleMeetingService.createMeeting(meetingOptions);
-
-          console.log("📱 Google Calendar service response:", {
-            hasResponse: !!meetingDetails,
-            response: meetingDetails,
-          });
-
-          if (meetingDetails) {
-            googleMeetData = {
-              meeting_url: meetingDetails.meeting_url,
-              meeting_platform: meetingDetails.meeting_platform,
-              meeting_id: meetingDetails.meeting_id,
-              meeting_password: meetingDetails.meeting_password,
+          if (isConnected) {
+            const meetingOptions: CreateMeetingOptions = {
+              title: `${service.name} - ${metadata.customerFirstName} ${metadata.customerLastName}`,
+              description: `Consultation meeting for: ${metadata.projectDescription || "Paid consultation"}`,
+              start: startDateTime,
+              end: endDateTime,
+              consultantId: assignedConsultant.consultant_id,
+              customerEmail: metadata.customerEmail,
+              customerName: `${metadata.customerFirstName} ${metadata.customerLastName}`,
             };
 
-            console.log("✅ Meeting space created successfully via webhook:", {
-              meetingUrl: meetingDetails.meeting_url,
-              platform: meetingDetails.meeting_platform,
-              meetingId: meetingDetails.meeting_id,
-              fullData: googleMeetData,
+            console.log(
+              "🎯 Creating Google Meet via webhook for consultant:",
+              assignedConsultant.consultant_id
+            );
+
+            const meetingDetails =
+              await GoogleMeetService.createMeeting(meetingOptions);
+
+            console.log("📱 Google Calendar service response:", {
+              hasResponse: !!meetingDetails,
+              response: meetingDetails,
             });
+
+            if (meetingDetails) {
+              googleMeetData = meetingDetails; // Use the complete payload as returned by the service
+
+              console.log("✅ Google Meet created successfully via webhook:", {
+                meetingUri: meetingDetails.meetingUri,
+                meetingCode: meetingDetails.meetingCode,
+                spaceName: meetingDetails.name,
+                fullData: googleMeetData,
+              });
+            } else {
+              console.log("⚠️ Google Meet creation failed via webhook");
+            }
           } else {
-            console.log("⚠️ Meeting creation returned null via webhook");
+            console.log(
+              "⚠️ Consultant has not connected Google account, skipping Google Meet creation via webhook"
+            );
           }
         } else {
           console.log("❌ No consultants available for Google Meet creation");
@@ -380,7 +391,7 @@ async function handlePaymentSucceeded(
         project_description_param: metadata.projectDescription,
         assignment_strategy_param: "optimal",
         lead_score_param: 70, // Paid service = higher lead score
-        google_meet_data_param: googleMeetData, // FIXED: Pass meeting data from webhook creation
+        google_meet_payload_param: googleMeetData, // FIXED: Pass Google Meet payload from webhook creation
       }
     );
 
@@ -393,7 +404,8 @@ async function handlePaymentSucceeded(
       bookingId: createdBooking.booking.id,
       bookingReference: createdBooking.booking.booking_reference,
       meetingUrl: createdBooking.booking.meeting_url,
-      googleCalendarEventId: createdBooking.booking.google_calendar_event_id,
+      meetingId: createdBooking.booking.meeting_id,
+      meetingPlatform: createdBooking.booking.meeting_platform,
       hasGoogleMeetData: !!googleMeetData,
     });
 

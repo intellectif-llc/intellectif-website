@@ -4,8 +4,10 @@ import {
 } from "@/lib/supabase-server";
 import { NextRequest, NextResponse } from "next/server";
 import { sendBookingConfirmationEmail } from "@/lib/email-service";
-import { SimpleMeetingService } from "@/lib/simple-meeting-service";
-import type { CreateMeetingOptions } from "@/lib/simple-meeting-service";
+import {
+  GoogleMeetService,
+  type CreateMeetingOptions,
+} from "@/lib/google-meet-service";
 
 // Helper function to check if user is staff
 async function isStaff(
@@ -125,7 +127,7 @@ export async function POST(request: NextRequest) {
         target_date: scheduledDate,
         target_time: scheduledTime,
         service_id_param: serviceId,
-        assignment_strategy_param: assignmentStrategy || "optimal",
+        assignment_strategy: assignmentStrategy || "optimal",
       }
     );
 
@@ -136,41 +138,58 @@ export async function POST(request: NextRequest) {
         name: assignedConsultant.consultant_name,
       });
 
-      // Create simple meeting space for the booking
+      // Create Google Meet meeting for the booking
       try {
-        const meetingOptions: CreateMeetingOptions = {
-          bookingId: "temp_" + Date.now(), // Temporary ID, will be updated later
-          customerName: `${customerData.firstName} ${customerData.lastName}`,
-          serviceName: service.name,
-          scheduledDateTime: new Date(
-            `${scheduledDate}T${scheduledTime}:00`
-          ).toISOString(),
-        };
+        // Check if consultant has Google account connected
+        const isConnected = await GoogleMeetService.isConsultantConnected(
+          assignedConsultant.consultant_id
+        );
 
-        console.log("🎯 Creating simple meeting space:", meetingOptions);
+        if (isConnected) {
+          const startTime = new Date(
+            `${scheduledDate}T${scheduledTime}:00.000Z`
+          );
+          const endTime = new Date(
+            startTime.getTime() + service.duration_minutes * 60000
+          );
 
-        const meetingDetails =
-          await SimpleMeetingService.createMeeting(meetingOptions);
-
-        if (meetingDetails) {
-          googleMeetData = {
-            meeting_url: meetingDetails.meeting_url,
-            meeting_platform: meetingDetails.meeting_platform,
-            meeting_id: meetingDetails.meeting_id,
-            meeting_password: meetingDetails.meeting_password,
+          const meetingOptions: CreateMeetingOptions = {
+            title: `${service.name} - ${customerData.firstName} ${customerData.lastName}`,
+            description: `Consultation meeting for: ${projectDescription}`,
+            start: startTime,
+            end: endTime,
+            consultantId: assignedConsultant.consultant_id,
+            customerEmail: customerData.email,
+            customerName: `${customerData.firstName} ${customerData.lastName}`,
           };
 
-          console.log("✅ Meeting space created successfully:", {
-            meetingUrl: meetingDetails.meeting_url,
-            platform: meetingDetails.meeting_platform,
-            meetingId: meetingDetails.meeting_id,
-          });
+          console.log(
+            "🎯 Creating Google Meet for consultant:",
+            assignedConsultant.consultant_id
+          );
+
+          const meetingDetails =
+            await GoogleMeetService.createMeeting(meetingOptions);
+
+          if (meetingDetails) {
+            googleMeetData = meetingDetails; // Use the complete payload as returned by the service
+
+            console.log("✅ Google Meet created successfully:", {
+              meetingUri: meetingDetails.meetingUri,
+              meetingCode: meetingDetails.meetingCode,
+              spaceName: meetingDetails.name,
+            });
+          } else {
+            console.log("⚠️ Google Meet creation failed");
+          }
         } else {
-          console.log("⚠️ Meeting creation returned null");
+          console.log(
+            "⚠️ Consultant has not connected Google account, skipping Google Meet creation"
+          );
         }
       } catch (meetingError) {
-        console.error("❌ Error creating meeting space:", meetingError);
-        console.log("⚠️ Booking will be created without meeting URL");
+        console.error("❌ Error creating Google Meet:", meetingError);
+        console.log("⚠️ Booking will be created without Google Meet");
       }
     }
 
@@ -191,13 +210,13 @@ export async function POST(request: NextRequest) {
           company: customerData.company || null,
         },
         project_description_param: projectDescription,
-        assignment_strategy_param: assignmentStrategy || "optimal",
+        assignment_strategy: assignmentStrategy || "optimal",
         lead_score_param: calculateLeadScore(
           service.price,
           customerData.company,
           projectDescription
         ),
-        google_meet_data_param: googleMeetData,
+        google_meet_payload_param: googleMeetData,
       }
     );
 
@@ -234,7 +253,8 @@ export async function POST(request: NextRequest) {
       status: booking.status,
       meetingUrl: booking.meeting_url,
       meetingPlatform: booking.meeting_platform,
-      googleCalendarEventId: booking.google_calendar_event_id,
+      meetingId: booking.meeting_id,
+      googleMeetSpaceName: booking.google_meet_space_name,
       consultantId: consultant.consultant_id,
       consultantName: consultant.consultant_name,
     });

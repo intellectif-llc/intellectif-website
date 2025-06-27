@@ -1,43 +1,64 @@
-# Copy this file to .env.local and fill in your actual values
+# Environment Variables Template
+# Copy this file to .env.local and fill in your values
 
 # Supabase Configuration
-NEXT_PUBLIC_SUPABASE_URL=your_supabase_project_url
+NEXT_PUBLIC_SUPABASE_URL=your_supabase_url
 NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
 SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_role_key
 
 # Stripe Configuration
-STRIPE_SECRET_KEY=sk_test_your_stripe_secret_key
-NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=pk_test_your_stripe_publishable_key
-STRIPE_WEBHOOK_SECRET=whsec_your_webhook_secret
+NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=your_stripe_publishable_key
+STRIPE_SECRET_KEY=your_stripe_secret_key
+STRIPE_WEBHOOK_SECRET=your_stripe_webhook_secret
+
+# Site Configuration
+NEXT_PUBLIC_SITE_URL=http://localhost:3000
+
+# Cloudflare Turnstile
+NEXT_PUBLIC_TURNSTILE_SITE_KEY=your_turnstile_site_key
+TURNSTILE_SECRET_KEY=your_turnstile_secret_key
 
 # AWS SES Configuration
 AWS_ACCESS_KEY_ID=your_aws_access_key
 AWS_SECRET_ACCESS_KEY=your_aws_secret_key
 AWS_REGION=us-east-1
-AWS_SES_FROM_EMAIL=hello@yourdomain.com
-AWS_SES_CONFIGURATION_SET=your_configuration_set_name
+AWS_SES_FROM_EMAIL=your_from_email
 
-# Cloudflare Turnstile (optional)
-NEXT_PUBLIC_TURNSTILE_SITE_KEY=your_turnstile_site_key
-TURNSTILE_SECRET_KEY=your_turnstile_secret_key
+# Google Meet API Configuration
+# You can use EITHER service account OR OAuth client credentials
 
-# Google Integration (Corporate Service Account - Recommended)
+# Option 1: Service Account (Recommended - No individual OAuth needed!)
+# Create a service account in Google Cloud Console
+# Download the JSON key and set these variables:
 GOOGLE_SERVICE_ACCOUNT_EMAIL=your-service-account@your-project.iam.gserviceaccount.com
-GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\nYOUR_PRIVATE_KEY_HERE\n-----END PRIVATE KEY-----"
+GOOGLE_SERVICE_ACCOUNT_KEY={"type":"service_account","project_id":"...","private_key_id":"...","private_key":"-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----\n","client_email":"...","client_id":"...","auth_uri":"...","token_uri":"...","auth_provider_x509_cert_url":"...","client_x509_cert_url":"..."}
 
-# Google Integration (OAuth - Alternative, requires individual user connections)
+# Option 2: OAuth Client Credentials (Alternative approach)
+# Create OAuth 2.0 Client ID in Google Cloud Console
 NEXT_PUBLIC_GOOGLE_CLIENT_ID=your_google_client_id
 GOOGLE_CLIENT_SECRET=your_google_client_secret
+# Get refresh token by running the OAuth flow once:
+GOOGLE_REFRESH_TOKEN=your_refresh_token
+
+# Instructions:
+# 1. For Service Account approach (easier):
+#    - Go to Google Cloud Console > IAM & Admin > Service Accounts
+#    - Create a new service account
+#    - Download the JSON key file
+#    - Copy the entire JSON content to GOOGLE_SERVICE_ACCOUNT_KEY
+#    - Copy the email to GOOGLE_SERVICE_ACCOUNT_EMAIL
+#    - Enable Google Meet API in Google Cloud Console
+#
+# 2. For OAuth approach (more complex):
+#    - Go to Google Cloud Console > APIs & Services > Credentials
+#    - Create OAuth 2.0 Client ID (Web application)
+#    - Set NEXT_PUBLIC_GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET
+#    - Use OAuth Playground to get refresh token
+#    - Set GOOGLE_REFRESH_TOKEN
 
 # Application Settings
 NEXT_PUBLIC_APP_URL=http://localhost:3000
-NEXT_PUBLIC_SITE_URL=http://localhost:3000
-NODE_ENV=development
+NODE_ENV=development 
 
-# Simple Meeting Provider (Choose one - no API keys required)
-# Default: Jitsi Meet (Free, works immediately)
-MEETING_PROVIDER=jitsi
-
-# Alternative Options:
-# MEETING_PROVIDER=whereby
-# MEETING_PROVIDER=google_meet_simple 
+# Google Meet Integration requires OAuth setup above
+# Consultants must connect their Google accounts in their profile 

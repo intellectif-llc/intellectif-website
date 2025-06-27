@@ -6,7 +6,8 @@
     "dev": "next dev --turbopack",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "test:google-meet": "node --env-file=.env.local test_google_meet_integration.mjs"
   },
   "dependencies": {
     "@aws-sdk/client-ses": "^3.830.0",

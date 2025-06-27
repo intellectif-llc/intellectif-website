@@ -252,23 +252,21 @@ CREATE OR REPLACE FUNCTION public.create_booking_with_availability_check(
     customer_data_param jsonb,
     project_description_param text,
     assignment_strategy_param text DEFAULT 'optimal'::text,
-    lead_score_param smallint DEFAULT 0
+    lead_score_param smallint DEFAULT 0,
+    google_meet_payload_param jsonb DEFAULT NULL -- Parameter to accept the full Google Meet API response
 )
  RETURNS jsonb
  LANGUAGE plpgsql
  SECURITY DEFINER
 AS $function$
 DECLARE
-    -- Kept from original function
     service_rec RECORD;
     consultant_assignment RECORD;
     booking_rec RECORD;
     booking_reference_val VARCHAR(20);
-
-    -- ADDED: Improvement from the newer function to hold the linked user's ID
     found_user_id uuid;
 BEGIN
-    -- ADDED: Kept robust input validation from the newer function
+    -- Input validation
     IF service_id_param IS NULL OR customer_metrics_id_param IS NULL OR
        customer_data_param IS NULL OR project_description_param IS NULL OR
        scheduled_date_param IS NULL OR scheduled_time_param IS NULL OR
@@ -276,21 +274,19 @@ BEGIN
         RETURN json_build_object('success', false, 'error', 'Required parameters, including a customer email, cannot be null');
     END IF;
 
-    -- ADDED: This is the core improvement you wanted to keep.
-    -- It finds a registered user by email to link the booking. If no user is found,
-    -- found_user_id remains NULL, which is the correct state for a guest booking.
+    -- Find registered user by email to link the booking
     SELECT id INTO found_user_id
     FROM auth.users
     WHERE email = customer_data_param->>'email'
     LIMIT 1;
 
-    -- ADDED: Kept improved service check from newer function (includes is_active)
+    -- Get service details and verify it's active
     SELECT * INTO service_rec FROM services WHERE id = service_id_param AND is_active = true;
     IF NOT FOUND THEN
         RETURN json_build_object('success', false, 'error', 'Service not found or inactive');
     END IF;
 
-    -- Kept from original: Get consultant assignment
+    -- Get optimal consultant assignment
     SELECT * INTO consultant_assignment
     FROM get_optimal_consultant_assignment(
         scheduled_date_param,
@@ -307,7 +303,7 @@ BEGIN
         );
     END IF;
 
-    -- Kept from original: Double-check availability (race condition protection)
+    -- Double-check availability (race condition protection)
     IF NOT EXISTS (
         SELECT 1 FROM get_available_consultants_with_buffer(
             scheduled_date_param,
@@ -323,12 +319,12 @@ BEGIN
         );
     END IF;
 
-    -- Kept from original: Generate booking reference
+    -- Generate booking reference
     booking_reference_val := generate_booking_reference();
 
-    -- MODIFIED INSERT: Based on the original, but with the 'user_id' column added.
+    -- Insert booking with Google Meet data support
     INSERT INTO bookings (
-        user_id, -- ADDED: Link to the registered user if found
+        user_id,
         booking_reference,
         service_id,
         scheduled_date,
@@ -343,10 +339,16 @@ BEGIN
         payment_amount,
         lead_score,
         booking_source,
+        -- Google Meet specific fields
+        meeting_platform,
+        meeting_url,
+        meeting_id,
+        google_meet_space_name,
+        google_meet_config,
         created_at,
         updated_at
     ) VALUES (
-        found_user_id, -- ADDED: Value can be the user's UUID or NULL for guests
+        found_user_id,
         booking_reference_val,
         service_id_param,
         scheduled_date_param,
@@ -361,30 +363,40 @@ BEGIN
         service_rec.price,
         lead_score_param,
         'website_booking'::lead_source_enum,
+        -- Extract Google Meet data if the payload is provided
+        CASE WHEN google_meet_payload_param IS NOT NULL THEN 'google_meet' ELSE NULL END,
+        google_meet_payload_param->>'meetingUri',
+        google_meet_payload_param->>'meetingCode',
+        google_meet_payload_param->>'name',
+        google_meet_payload_param->'config',
         NOW(),
         NOW()
     )
     RETURNING * INTO booking_rec;
 
-    -- MODIFIED RETURN: Based on the original, but adds the 'user_id' for confirmation.
+    -- Return comprehensive booking details
     RETURN json_build_object(
         'success', true,
-        'booking', json_build_object(
+        'booking', jsonb_strip_nulls(jsonb_build_object(
             'id', booking_rec.id,
-            'user_id', booking_rec.user_id, -- ADDED: Return the linked user_id for clarity
+            'user_id', booking_rec.user_id,
             'booking_reference', booking_rec.booking_reference,
             'status', booking_rec.status,
             'scheduled_datetime', booking_rec.scheduled_datetime,
             'payment_status', booking_rec.payment_status,
             'payment_amount', booking_rec.payment_amount,
             'follow_up_required', booking_rec.follow_up_required,
+            'meeting_url', booking_rec.meeting_url,
+            'meeting_platform', booking_rec.meeting_platform,
+            'meeting_id', booking_rec.meeting_id,
+            'google_meet_space_name', booking_rec.google_meet_space_name,
             'service', json_build_object(
                 'id', service_rec.id,
                 'name', service_rec.name,
                 'duration_minutes', service_rec.duration_minutes,
                 'price', service_rec.price
             )
-        ),
+        )),
         'consultant', json_build_object(
             'consultant_id', consultant_assignment.consultant_id,
             'consultant_name', consultant_assignment.consultant_name,
@@ -394,7 +406,6 @@ BEGIN
     );
 
 EXCEPTION
-    -- ADDED: Kept enhanced error reporting from the newer function
     WHEN others THEN
         RETURN json_build_object(
             'success', false,
