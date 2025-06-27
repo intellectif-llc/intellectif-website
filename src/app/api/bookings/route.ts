@@ -9,6 +9,48 @@ import {
   type CreateMeetingOptions,
 } from "@/lib/google-meet-service";
 
+// Define proper types to replace 'any'
+interface BookingRecord {
+  id: string;
+  booking_reference: string;
+  user_id?: string;
+  consultant_id?: string;
+  customer_data: {
+    email?: string;
+    first_name?: string;
+    last_name?: string;
+    phone?: string;
+    company?: string;
+  };
+  scheduled_date: string;
+  scheduled_time: string;
+  scheduled_datetime: string;
+  status: string;
+  service: {
+    name: string;
+    duration_minutes: number;
+  };
+  created_at: string;
+}
+
+interface ConsultantProfile {
+  id: string;
+  first_name: string;
+  last_name: string;
+  email?: string;
+}
+
+interface TransformedBooking extends BookingRecord {
+  customer_data: {
+    email: string;
+    firstName: string;
+    lastName: string;
+    phone: string;
+    company: string;
+  };
+  consultant?: ConsultantProfile | null;
+}
+
 // Helper function to check if user is staff - ALWAYS use service role to bypass RLS
 async function isStaff(userId: string): Promise<boolean> {
   try {
@@ -462,12 +504,12 @@ export async function GET(request: NextRequest) {
       const uniqueConsultantIds = [
         ...new Set(
           (bookings || [])
-            .map((booking: any) => booking.consultant_id)
+            .map((booking: BookingRecord) => booking.consultant_id)
             .filter(Boolean)
         ),
       ];
 
-      let consultantProfiles: Record<string, any> = {};
+      let consultantProfiles: Record<string, ConsultantProfile> = {};
       if (uniqueConsultantIds.length > 0) {
         const { data: profiles } = await serviceSupabase
           .from("profiles")
@@ -475,40 +517,48 @@ export async function GET(request: NextRequest) {
           .in("id", uniqueConsultantIds);
 
         if (profiles) {
-          consultantProfiles = profiles.reduce((acc: any, profile: any) => {
-            acc[profile.id] = {
-              id: profile.id,
-              first_name: profile.first_name,
-              last_name: profile.last_name,
-              // Skip email lookup for now to avoid permissions issues
-            };
-            return acc;
-          }, {});
+          consultantProfiles = profiles.reduce(
+            (
+              acc: Record<string, ConsultantProfile>,
+              profile: ConsultantProfile
+            ) => {
+              acc[profile.id] = {
+                id: profile.id,
+                first_name: profile.first_name,
+                last_name: profile.last_name,
+                // Skip email lookup for now to avoid permissions issues
+              };
+              return acc;
+            },
+            {}
+          );
         }
       }
 
       // Transform the data for consistent format
-      const transformedBookings = (bookings || []).map((booking: any) => {
-        const transformedCustomerData = {
-          email: booking.customer_data?.email || "",
-          firstName: booking.customer_data?.first_name || "",
-          lastName: booking.customer_data?.last_name || "",
-          phone: booking.customer_data?.phone || "",
-          company: booking.customer_data?.company || "",
-        };
+      const transformedBookings = (bookings || []).map(
+        (booking: BookingRecord): TransformedBooking => {
+          const transformedCustomerData = {
+            email: booking.customer_data?.email || "",
+            firstName: booking.customer_data?.first_name || "",
+            lastName: booking.customer_data?.last_name || "",
+            phone: booking.customer_data?.phone || "",
+            company: booking.customer_data?.company || "",
+          };
 
-        return {
-          ...booking,
-          customer_data: transformedCustomerData,
-          service: booking.service || {
-            name: "Unknown Service",
-            duration_minutes: 60,
-          },
-          consultant: booking.consultant_id
-            ? consultantProfiles[booking.consultant_id] || null
-            : null,
-        };
-      });
+          return {
+            ...booking,
+            customer_data: transformedCustomerData,
+            service: booking.service || {
+              name: "Unknown Service",
+              duration_minutes: 60,
+            },
+            consultant: booking.consultant_id
+              ? consultantProfiles[booking.consultant_id] || null
+              : null,
+          };
+        }
+      );
 
       console.log(
         `✅ Retrieved ${transformedBookings.length} bookings for staff user`
@@ -560,35 +610,36 @@ export async function GET(request: NextRequest) {
         // Get consultant's own profile info using service role client
         const { data: consultantProfile } = await serviceSupabase
           .from("profiles")
-          .select("first_name, last_name")
+          .select("id, first_name, last_name")
           .eq("id", user.id)
           .single();
 
-        const transformedBookings = (bookings || []).map((booking: any) => {
-          const transformedCustomerData = {
-            email: booking.customer_data?.email || "",
-            firstName: booking.customer_data?.first_name || "",
-            lastName: booking.customer_data?.last_name || "",
-            phone: booking.customer_data?.phone || "",
-            company: booking.customer_data?.company || "",
-          };
+        const transformedBookings = (bookings || []).map(
+          (booking: BookingRecord): TransformedBooking => {
+            const transformedCustomerData = {
+              email: booking.customer_data?.email || "",
+              firstName: booking.customer_data?.first_name || "",
+              lastName: booking.customer_data?.last_name || "",
+              phone: booking.customer_data?.phone || "",
+              company: booking.customer_data?.company || "",
+            };
 
-          return {
-            ...booking,
-            customer_data: transformedCustomerData,
-            service: booking.service || {
-              name: "Unknown Service",
-              duration_minutes: 60,
-            },
-            consultant: consultantProfile || null,
-          };
-        });
+            return {
+              ...booking,
+              customer_data: transformedCustomerData,
+              service: booking.service || {
+                name: "Unknown Service",
+                duration_minutes: 60,
+              },
+              consultant: consultantProfile || null,
+            };
+          }
+        );
 
         console.log(
           `✅ Retrieved ${transformedBookings.length} bookings for consultant`
         );
         return NextResponse.json({ bookings: transformedBookings });
-        // src/app/api/bookings/route.ts
       } else {
         // CUSTOMER USER: Show bookings they created (via user_id)
         console.log(
@@ -623,12 +674,12 @@ export async function GET(request: NextRequest) {
         const uniqueConsultantIds = [
           ...new Set(
             (bookings || [])
-              .map((booking: any) => booking.consultant_id)
+              .map((booking: BookingRecord) => booking.consultant_id)
               .filter(Boolean)
           ),
         ];
 
-        let consultantProfiles: Record<string, any> = {};
+        let consultantProfiles: Record<string, ConsultantProfile> = {};
         if (uniqueConsultantIds.length > 0) {
           // Always use service role client to avoid RLS policy recursion
           const serviceSupabase = createServiceRoleClient();
@@ -638,38 +689,46 @@ export async function GET(request: NextRequest) {
             .in("id", uniqueConsultantIds);
 
           if (profiles) {
-            consultantProfiles = profiles.reduce((acc: any, profile: any) => {
-              acc[profile.id] = {
-                ...profile,
-                // Skip email for customer users - they don't need consultant emails
-              };
-              return acc;
-            }, {});
+            consultantProfiles = profiles.reduce(
+              (
+                acc: Record<string, ConsultantProfile>,
+                profile: ConsultantProfile
+              ) => {
+                acc[profile.id] = {
+                  ...profile,
+                  // Skip email for customer users - they don't need consultant emails
+                };
+                return acc;
+              },
+              {}
+            );
           }
         }
 
         // Transform the bookings with consultant data
-        const transformedBookings = (bookings || []).map((booking: any) => {
-          const transformedCustomerData = {
-            email: booking.customer_data?.email || "",
-            firstName: booking.customer_data?.first_name || "",
-            lastName: booking.customer_data?.last_name || "",
-            phone: booking.customer_data?.phone || "",
-            company: booking.customer_data?.company || "",
-          };
+        const transformedBookings = (bookings || []).map(
+          (booking: BookingRecord): TransformedBooking => {
+            const transformedCustomerData = {
+              email: booking.customer_data?.email || "",
+              firstName: booking.customer_data?.first_name || "",
+              lastName: booking.customer_data?.last_name || "",
+              phone: booking.customer_data?.phone || "",
+              company: booking.customer_data?.company || "",
+            };
 
-          return {
-            ...booking,
-            customer_data: transformedCustomerData,
-            service: booking.service || {
-              name: "Unknown Service",
-              duration_minutes: 60,
-            },
-            consultant: booking.consultant_id
-              ? consultantProfiles[booking.consultant_id] || null
-              : null,
-          };
-        });
+            return {
+              ...booking,
+              customer_data: transformedCustomerData,
+              service: booking.service || {
+                name: "Unknown Service",
+                duration_minutes: 60,
+              },
+              consultant: booking.consultant_id
+                ? consultantProfiles[booking.consultant_id] || null
+                : null,
+            };
+          }
+        );
 
         console.log(
           `✅ Retrieved ${transformedBookings.length} bookings for customer`

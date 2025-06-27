@@ -1,7 +1,4 @@
-import {
-  createRouteHandlerClient,
-  createServiceRoleClient,
-} from "@/lib/supabase-server";
+import { createServiceRoleClient } from "@/lib/supabase-server";
 
 // Comprehensive booking types aligned with database schema
 export interface BookingData {

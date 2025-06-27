@@ -213,28 +213,7 @@ export default function BookingManager() {
     }
   };
 
-  // Professional meeting access control
-  const isMeetingAccessible = (booking: Booking) => {
-    const now = new Date();
-    const bookingDateTime = new Date(
-      booking.scheduled_datetime ||
-        `${booking.scheduled_date}T${booking.scheduled_time}:00`
-    );
-    const endDateTime = new Date(
-      bookingDateTime.getTime() +
-        (booking.service?.duration_minutes || 60) * 60000
-    );
-
-    // Meeting is accessible from 15 minutes before start until end time
-    const accessStartTime = new Date(bookingDateTime.getTime() - 15 * 60000); // 15 minutes before
-
-    return (
-      booking.status === "confirmed" &&
-      booking.meeting_url &&
-      now >= accessStartTime &&
-      now <= endDateTime
-    );
-  };
+  // Note: Removed unused isMeetingAccessible function
 
   const getMeetingAccessStatus = (booking: Booking) => {
     const now = new Date();
@@ -391,7 +370,7 @@ export default function BookingManager() {
             To access your bookings:
           </h4>
           <ol className="text-left text-gray-300 space-y-2">
-            <li>1. Make sure you're signed in to your account</li>
+            <li>1. Make sure you&apos;re signed in to your account</li>
             <li>2. Use the same email address you used for booking</li>
             <li>3. Contact support if you continue having issues</li>
           </ol>

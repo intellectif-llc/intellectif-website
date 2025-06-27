@@ -15,10 +15,8 @@ console.log("🔍 SUPABASE CLIENT DEBUG:", {
   urlStart: supabaseUrl?.substring(0, 20) + "...",
   hasAnonKey: !!supabaseAnonKey,
   anonKeyLength: supabaseAnonKey?.length || 0,
-  anonKeyStart: supabaseAnonKey?.substring(0, 20) + "...",
   hasServiceKey: !!supabaseServiceKey,
   serviceKeyLength: supabaseServiceKey?.length || 0,
-  serviceKeyStart: supabaseServiceKey?.substring(0, 20) + "...",
   nodeEnv: process.env.NODE_ENV,
   allEnvKeys: Object.keys(process.env).filter((key) =>
     key.includes("SUPABASE")
@@ -64,7 +62,6 @@ export const createServiceRoleClient = () => {
   console.log("🔍 Service Key Check:", {
     hasServiceKey: !!supabaseServiceKey,
     serviceKeyLength: supabaseServiceKey?.length || 0,
-    serviceKeyStart: supabaseServiceKey?.substring(0, 30) + "...",
   });
 
   if (!supabaseServiceKey) {
