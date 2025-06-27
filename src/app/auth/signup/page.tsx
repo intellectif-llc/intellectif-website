@@ -13,9 +13,11 @@ export default function SignUpPage() {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
+  const [acceptTerms, setAcceptTerms] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+  const [showConsentError, setShowConsentError] = useState(false);
 
   const { signUp } = useAuth();
 
@@ -37,6 +39,7 @@ export default function SignUpPage() {
     // Reset messages
     setError("");
     setSuccess("");
+    setShowConsentError(false);
 
     // Validation
     if (
@@ -57,6 +60,15 @@ export default function SignUpPage() {
 
     if (password.length < 6) {
       setError("Password must be at least 6 characters long");
+      return;
+    }
+
+    // Validate Terms and Conditions acceptance
+    if (!acceptTerms) {
+      setShowConsentError(true);
+      setError(
+        "You must accept the Terms and Conditions and Privacy Policy to create an account"
+      );
       return;
     }
 
@@ -88,6 +100,8 @@ export default function SignUpPage() {
         setConfirmPassword("");
         setFirstName("");
         setLastName("");
+        setAcceptTerms(false);
+        setShowConsentError(false);
         resetTurnstile();
       }
     } catch (error) {
@@ -98,6 +112,15 @@ export default function SignUpPage() {
       resetTurnstile();
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleConsentChange = (checked: boolean) => {
+    setAcceptTerms(checked);
+    // Clear consent-related errors when user accepts terms
+    if (checked && showConsentError) {
+      setShowConsentError(false);
+      setError("");
     }
   };
 
@@ -274,8 +297,8 @@ export default function SignUpPage() {
               </div>
             )}
 
-            {/* Error Message */}
-            {error && (
+            {/* Error Message - Only show if not a consent error */}
+            {error && !showConsentError && (
               <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-4">
                 <p className="text-red-400 text-sm">{error}</p>
               </div>
@@ -288,17 +311,138 @@ export default function SignUpPage() {
               </div>
             )}
 
+            {/* Terms and Conditions Consent */}
+            <div
+              className={`
+              relative p-4 rounded-xl border transition-all duration-300
+              ${
+                showConsentError
+                  ? "bg-red-500/5 border-red-500/40 shadow-red-500/20 shadow-lg"
+                  : "bg-[#051028]/30 border-[#6bdcc0]/20 hover:border-[#6bdcc0]/40"
+              }
+            `}
+            >
+              <div className="flex items-start space-x-3">
+                <div className="relative flex-shrink-0 mt-0.5">
+                  <input
+                    id="acceptTerms"
+                    name="acceptTerms"
+                    type="checkbox"
+                    checked={acceptTerms}
+                    onChange={(e) => handleConsentChange(e.target.checked)}
+                    className="sr-only"
+                    aria-describedby="terms-description"
+                  />
+                  <label
+                    htmlFor="acceptTerms"
+                    className={`
+                      flex items-center justify-center w-5 h-5 rounded-md border-2 cursor-pointer
+                      transition-all duration-200 ease-in-out
+                      ${
+                        acceptTerms
+                          ? "bg-[#6bdcc0] border-[#6bdcc0] text-[#051028]"
+                          : showConsentError
+                            ? "border-red-400 bg-red-500/10 hover:border-red-300"
+                            : "border-[#6bdcc0]/50 bg-[#051028]/50 hover:border-[#6bdcc0] hover:bg-[#6bdcc0]/10"
+                      }
+                    `}
+                  >
+                    {acceptTerms && (
+                      <svg
+                        className="w-3 h-3 text-current"
+                        fill="currentColor"
+                        viewBox="0 0 20 20"
+                      >
+                        <path
+                          fillRule="evenodd"
+                          d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
+                          clipRule="evenodd"
+                        />
+                      </svg>
+                    )}
+                  </label>
+                </div>
+                <div className="flex-1 min-w-0">
+                  <label
+                    htmlFor="acceptTerms"
+                    id="terms-description"
+                    className={`
+                      text-sm leading-relaxed cursor-pointer transition-colors duration-200
+                      ${showConsentError ? "text-red-300" : "text-gray-300 hover:text-white"}
+                    `}
+                  >
+                    I agree to the{" "}
+                    <Link
+                      href="/terms-and-conditions"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-[#6bdcc0] hover:text-[#22d3ee] font-medium transition-colors duration-300 underline decoration-[#6bdcc0]/30 hover:decoration-[#22d3ee]/50"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      Terms and Conditions
+                    </Link>{" "}
+                    and{" "}
+                    <Link
+                      href="/privacy"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-[#6bdcc0] hover:text-[#22d3ee] font-medium transition-colors duration-300 underline decoration-[#6bdcc0]/30 hover:decoration-[#22d3ee]/50"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      Privacy Policy
+                    </Link>
+                  </label>
+                  {showConsentError && (
+                    <div className="mt-2 flex items-center space-x-2">
+                      <svg
+                        className="w-4 h-4 text-red-400 flex-shrink-0"
+                        fill="currentColor"
+                        viewBox="0 0 20 20"
+                      >
+                        <path
+                          fillRule="evenodd"
+                          d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z"
+                          clipRule="evenodd"
+                        />
+                      </svg>
+                      <p className="text-red-400 text-xs">
+                        Please accept our Terms and Conditions and Privacy
+                        Policy to continue
+                      </p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+
             {/* Submit Button */}
             <Button
               type="submit"
               variant="primary"
               size="lg"
               isLoading={isLoading}
-              disabled={isLoading || !isVerified}
+              disabled={isLoading || !isVerified || !acceptTerms}
               className="w-full"
             >
               {isLoading ? "Creating Account..." : "Create Account"}
             </Button>
+
+            {/* Helper text for disabled state */}
+            {(!isVerified || !acceptTerms) && !isLoading && (
+              <div className="mt-2 text-center">
+                <p className="text-xs text-gray-400">
+                  {!isVerified &&
+                    !acceptTerms &&
+                    "Complete security verification and accept terms to continue"}
+                  {!isVerified &&
+                    acceptTerms &&
+                    "Complete security verification to continue"}
+                  {isVerified &&
+                    !acceptTerms &&
+                    "Accept Terms and Conditions to continue"}
+                </p>
+              </div>
+            )}
           </form>
 
           {/* Sign In Link */}
