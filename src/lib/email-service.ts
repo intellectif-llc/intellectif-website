@@ -36,7 +36,7 @@ function formatEmailDate(dateString: string): string {
 // Helper function to get environment-based email config
 function getEmailConfig() {
   return {
-    fromEmail: process.env.AWS_SES_FROM_EMAIL || "hello@intellectif.com",
+    fromEmail: process.env.SES_FROM_EMAIL_AWS || "hello@intellectif.com",
     companyName: "Intellectif",
     companyWebsite: "https://intellectif.com",
     supportEmail: "admin@intellectif.com",
