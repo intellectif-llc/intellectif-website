@@ -19,7 +19,7 @@ function BookingSuccessContent() {
       const response = await fetch(`/api/bookings/${bookingId}`);
       if (response.ok) {
         const data = await response.json();
-        setBookingDetails(data);
+        setBookingDetails(data.booking);
       }
     } catch (error) {
       console.error("Failed to fetch booking details:", error);

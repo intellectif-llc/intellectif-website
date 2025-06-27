@@ -9,13 +9,11 @@ import {
   type CreateMeetingOptions,
 } from "@/lib/google-meet-service";
 
-// Helper function to check if user is staff
-async function isStaff(
-  supabase: Awaited<ReturnType<typeof createRouteHandlerClient>>,
-  userId: string
-): Promise<boolean> {
+// Helper function to check if user is staff - ALWAYS use service role to bypass RLS
+async function isStaff(userId: string): Promise<boolean> {
   try {
-    const { data } = await supabase
+    const serviceSupabase = createServiceRoleClient();
+    const { data } = await serviceSupabase
       .from("profiles")
       .select("is_staff")
       .eq("id", userId)
@@ -342,8 +340,8 @@ export async function GET(request: NextRequest) {
     const unassigned = searchParams.get("unassigned");
 
     if (bookingId) {
-      // For single booking access, check staff status with auth client
-      if (!user || !(await isStaff(authSupabase, user.id))) {
+      // For single booking access, check staff status with service role client
+      if (!user || !(await isStaff(user.id))) {
         if (!customerEmail) {
           return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
         }
@@ -379,12 +377,24 @@ export async function GET(request: NextRequest) {
           `
           *,
           service:services(*),
-          consultant:profiles!consultant_id(first_name, last_name, email),
           customer_metrics(*)
         `
         )
         .eq("id", bookingId)
         .single();
+
+      // If booking found and has consultant, fetch consultant profile separately
+      if (booking && booking.consultant_id) {
+        const { data: consultantProfile } = await serviceSupabase
+          .from("profiles")
+          .select("first_name, last_name, id")
+          .eq("id", booking.consultant_id)
+          .single();
+
+        if (consultantProfile) {
+          booking.consultant = consultantProfile;
+        }
+      }
 
       if (error || !booking) {
         return NextResponse.json(
@@ -398,7 +408,7 @@ export async function GET(request: NextRequest) {
 
     // List bookings with role-based access control
     console.log("🔍 Checking staff status for user:", user?.id);
-    const staffStatus = user ? await isStaff(authSupabase, user.id) : false;
+    const staffStatus = user ? await isStaff(user.id) : false;
     console.log("📊 Staff check result:", {
       userId: user?.id,
       isStaff: staffStatus,
@@ -409,22 +419,21 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    // Use service role client for all booking queries
-    const serviceSupabase = createServiceRoleClient();
-
-    // Build query based on user permissions and filters
-    // Start with basic bookings query to avoid join issues
-    let query = serviceSupabase
-      .from("bookings")
-      .select("*")
-      .order("created_at", { ascending: false });
-
     if (staffStatus) {
-      // Staff users: Apply filters based on query parameters
-      console.log("✅ Staff user - applying filters:", {
-        consultantId,
-        unassigned,
-      });
+      // STAFF USERS: Use service role client to bypass RLS and see all bookings
+      console.log("✅ Staff user - using service role client for full access");
+      const serviceSupabase = createServiceRoleClient();
+
+      // Build query based on query parameters
+      let query = serviceSupabase
+        .from("bookings")
+        .select(
+          `
+          *,
+          service:services(name, duration_minutes)
+        `
+        )
+        .order("created_at", { ascending: false });
 
       if (consultantId) {
         // Filter by specific consultant
@@ -435,97 +444,127 @@ export async function GET(request: NextRequest) {
         query = query.is("consultant_id", null);
         console.log("🔍 Filtering for unassigned bookings");
       }
-      // If no filters, staff sees all bookings (default behavior)
-    } else {
-      // Non-staff users: Only see their own assigned bookings
-      console.log("👤 Non-staff user - filtering to own bookings only");
-      query = query.eq("consultant_id", user.id);
-    }
 
-    // Execute the query
-    console.log("🔍 About to execute query for user:", {
-      userId: user.id,
-      isStaff: staffStatus,
-      filters: { consultantId, unassigned },
-    });
+      const { data: bookings, error } = await query;
 
-    const { data: bookings, error } = await query.limit(100);
+      if (error) {
+        console.error("❌ Error fetching staff bookings:", error);
+        return NextResponse.json(
+          {
+            error: "Failed to fetch bookings",
+            details: error.message || "Database error",
+          },
+          { status: 500 }
+        );
+      }
 
-    console.log("📊 Query execution result:", {
-      success: !error,
-      bookingsCount: bookings?.length || 0,
-      error: error
-        ? {
-            code: error.code,
-            message: error.message,
-            details: error.details,
-            hint: error.hint,
-          }
-        : null,
-    });
+      // Get consultant info for all unique consultant IDs
+      const uniqueConsultantIds = [
+        ...new Set(
+          (bookings || [])
+            .map((booking: any) => booking.consultant_id)
+            .filter(Boolean)
+        ),
+      ];
 
-    if (error) {
-      console.error("❌ Supabase error fetching bookings:", {
-        error,
-        code: error.code,
-        message: error.message,
-        details: error.details,
-        hint: error.hint,
+      let consultantProfiles: Record<string, any> = {};
+      if (uniqueConsultantIds.length > 0) {
+        const { data: profiles } = await serviceSupabase
+          .from("profiles")
+          .select("id, first_name, last_name")
+          .in("id", uniqueConsultantIds);
+
+        if (profiles) {
+          consultantProfiles = profiles.reduce((acc: any, profile: any) => {
+            acc[profile.id] = {
+              id: profile.id,
+              first_name: profile.first_name,
+              last_name: profile.last_name,
+              // Skip email lookup for now to avoid permissions issues
+            };
+            return acc;
+          }, {});
+        }
+      }
+
+      // Transform the data for consistent format
+      const transformedBookings = (bookings || []).map((booking: any) => {
+        const transformedCustomerData = {
+          email: booking.customer_data?.email || "",
+          firstName: booking.customer_data?.first_name || "",
+          lastName: booking.customer_data?.last_name || "",
+          phone: booking.customer_data?.phone || "",
+          company: booking.customer_data?.company || "",
+        };
+
+        return {
+          ...booking,
+          customer_data: transformedCustomerData,
+          service: booking.service || {
+            name: "Unknown Service",
+            duration_minutes: 60,
+          },
+          consultant: booking.consultant_id
+            ? consultantProfiles[booking.consultant_id] || null
+            : null,
+        };
       });
-      return NextResponse.json(
-        {
-          error: "Failed to fetch bookings",
-          details: error.message || "Unknown database error",
-          code: error.code || "UNKNOWN_ERROR",
-        },
-        { status: 500 }
+
+      console.log(
+        `✅ Retrieved ${transformedBookings.length} bookings for staff user`
       );
-    }
+      return NextResponse.json({ bookings: transformedBookings });
+    } else {
+      // NON-STAFF USERS: Determine if they are consultant or customer
+      console.log("👤 Non-staff user - determining user type");
 
-    console.log("✅ Successfully fetched bookings:", {
-      count: bookings?.length || 0,
-      filters: { consultantId, unassigned },
-      userRole: staffStatus ? "staff" : "consultant",
-      sampleBooking: bookings?.[0]
-        ? {
-            id: bookings[0].id,
-            booking_reference: bookings[0].booking_reference,
-            consultant_id: bookings[0].consultant_id,
-            status: bookings[0].status,
-            customer_data: bookings[0].customer_data, // Debug customer data
-          }
-        : null,
-    });
+      // Check if this user is a consultant (has bookings assigned to them)
+      const { data: consultantBookings } = await authSupabase
+        .from("bookings")
+        .select("id")
+        .eq("consultant_id", user.id)
+        .limit(1);
 
-    // Enrich bookings with service and consultant data
-    const enrichedBookings = await Promise.all(
-      (bookings || []).map(async (booking) => {
-        try {
-          console.log("🔍 Processing booking:", {
-            id: booking.id,
-            original_customer_data: booking.customer_data,
-            consultant_id: booking.consultant_id,
-          });
+      const isConsultant = consultantBookings && consultantBookings.length > 0;
 
-          // Get service data
-          const { data: service } = await serviceSupabase
-            .from("services")
-            .select("name, duration_minutes")
-            .eq("id", booking.service_id)
-            .single();
+      if (isConsultant) {
+        // CONSULTANT USER: Show bookings assigned to them with consultant info
+        console.log("👨‍💼 Consultant user - fetching assigned bookings");
 
-          // Get consultant data if assigned
-          let consultant = null;
-          if (booking.consultant_id) {
-            const { data: consultantData } = await serviceSupabase
-              .from("profiles")
-              .select("first_name, last_name")
-              .eq("id", booking.consultant_id)
-              .single();
-            consultant = consultantData;
-            console.log("👤 Consultant data fetched:", consultant);
-          }
+        // Use service role client for consultants to bypass RLS for consultant profile join
+        // This allows consultants to see their own profile info with their bookings
+        const serviceSupabase = createServiceRoleClient();
+        const { data: bookings, error } = await serviceSupabase
+          .from("bookings")
+          .select(
+            `
+            *,
+            service:services(name, duration_minutes)
+          `
+          )
+          .eq("consultant_id", user.id)
+          .order("created_at", { ascending: false })
+          .limit(100);
 
+        if (error) {
+          console.error("❌ Error fetching consultant bookings:", error);
+          return NextResponse.json(
+            {
+              error: "Failed to fetch bookings",
+              details: error.message || "Database error",
+            },
+            { status: 500 }
+          );
+        }
+
+        // Get consultant's own profile info using service role client
+        const { data: consultantProfile } = await serviceSupabase
+          .from("profiles")
+          .select("first_name, last_name")
+          .eq("id", user.id)
+          .single();
+
+        const transformedBookings = (bookings || []).map((booking: any) => {
           const transformedCustomerData = {
             email: booking.customer_data?.email || "",
             firstName: booking.customer_data?.first_name || "",
@@ -534,45 +573,117 @@ export async function GET(request: NextRequest) {
             company: booking.customer_data?.company || "",
           };
 
-          console.log("🔄 Transformed customer data:", {
-            original: booking.customer_data,
-            transformed: transformedCustomerData,
-          });
-
           return {
             ...booking,
-            // Transform customer_data from snake_case to camelCase for frontend
             customer_data: transformedCustomerData,
-            service: service || {
+            service: booking.service || {
               name: "Unknown Service",
-              duration_minutes: 0,
+              duration_minutes: 60,
             },
-            consultant: consultant,
+            consultant: consultantProfile || null,
           };
-        } catch (enrichError) {
-          console.error("Error enriching booking:", enrichError);
+        });
+
+        console.log(
+          `✅ Retrieved ${transformedBookings.length} bookings for consultant`
+        );
+        return NextResponse.json({ bookings: transformedBookings });
+        // src/app/api/bookings/route.ts
+      } else {
+        // CUSTOMER USER: Show bookings they created (via user_id)
+        console.log(
+          "👤 Customer user - fetching their bookings for user_id:",
+          user.id
+        );
+
+        const { data: bookings, error } = await authSupabase
+          .from("bookings")
+          .select(
+            `
+            *,
+            service:services(name, duration_minutes)
+          `
+          )
+          .eq("user_id", user.id) // ✅ FIX: This line is added to filter by the user's ID
+          .order("created_at", { ascending: false })
+          .limit(100);
+
+        if (error) {
+          console.error("❌ Error fetching customer bookings:", error);
+          return NextResponse.json(
+            {
+              error: "Failed to fetch bookings",
+              details: error.message || "Database error",
+            },
+            { status: 500 }
+          );
+        }
+
+        // Fetch consultant profiles for assigned bookings using service role client
+        const uniqueConsultantIds = [
+          ...new Set(
+            (bookings || [])
+              .map((booking: any) => booking.consultant_id)
+              .filter(Boolean)
+          ),
+        ];
+
+        let consultantProfiles: Record<string, any> = {};
+        if (uniqueConsultantIds.length > 0) {
+          // Always use service role client to avoid RLS policy recursion
+          const serviceSupabase = createServiceRoleClient();
+          const { data: profiles } = await serviceSupabase
+            .from("profiles")
+            .select("id, first_name, last_name")
+            .in("id", uniqueConsultantIds);
+
+          if (profiles) {
+            consultantProfiles = profiles.reduce((acc: any, profile: any) => {
+              acc[profile.id] = {
+                ...profile,
+                // Skip email for customer users - they don't need consultant emails
+              };
+              return acc;
+            }, {});
+          }
+        }
+
+        // Transform the bookings with consultant data
+        const transformedBookings = (bookings || []).map((booking: any) => {
+          const transformedCustomerData = {
+            email: booking.customer_data?.email || "",
+            firstName: booking.customer_data?.first_name || "",
+            lastName: booking.customer_data?.last_name || "",
+            phone: booking.customer_data?.phone || "",
+            company: booking.customer_data?.company || "",
+          };
+
           return {
             ...booking,
-            // Transform customer_data from snake_case to camelCase for frontend
-            customer_data: {
-              email: booking.customer_data?.email || "",
-              firstName: booking.customer_data?.first_name || "",
-              lastName: booking.customer_data?.last_name || "",
-              phone: booking.customer_data?.phone || "",
-              company: booking.customer_data?.company || "",
+            customer_data: transformedCustomerData,
+            service: booking.service || {
+              name: "Unknown Service",
+              duration_minutes: 60,
             },
-            service: { name: "Unknown Service", duration_minutes: 0 },
-            consultant: null,
+            consultant: booking.consultant_id
+              ? consultantProfiles[booking.consultant_id] || null
+              : null,
           };
-        }
-      })
-    );
+        });
 
-    return NextResponse.json({ bookings: enrichedBookings });
+        console.log(
+          `✅ Retrieved ${transformedBookings.length} bookings for customer`
+        );
+        return NextResponse.json({ bookings: transformedBookings });
+      }
+    }
   } catch (error) {
-    console.error("❌ Booking GET API Error:", error);
+    console.error("❌ Unexpected error in GET /api/bookings:", error);
     return NextResponse.json(
-      { error: "Internal server error" },
+      {
+        error: "Internal server error",
+        details: error instanceof Error ? error.message : "Unknown error",
+      },
       { status: 500 }
     );
   }

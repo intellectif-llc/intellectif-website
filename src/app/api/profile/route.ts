@@ -6,20 +6,21 @@ import { NextRequest, NextResponse } from "next/server";
 
 export async function GET(_request: NextRequest) {
   try {
-    const supabase = await createRouteHandlerClient();
+    const authSupabase = await createRouteHandlerClient();
 
     // Get current user
     const {
       data: { user },
       error: userError,
-    } = await supabase.auth.getUser();
+    } = await authSupabase.auth.getUser();
 
     if (userError || !user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    // Get user profile from profiles table
-    const { data: profile, error: profileError } = await supabase
+    // Use service role client to bypass RLS for profile lookup
+    const serviceSupabase = createServiceRoleClient();
+    const { data: profile, error: profileError } = await serviceSupabase
       .from("profiles")
       .select("*")
       .eq("id", user.id)

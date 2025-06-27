@@ -4,13 +4,11 @@ import {
   createServiceRoleClient,
 } from "@/lib/supabase-server";
 
-// Helper function to check if user is staff
-async function isStaff(
-  supabase: Awaited<ReturnType<typeof createRouteHandlerClient>>,
-  userId: string
-): Promise<boolean> {
+// Helper function to check if user is staff - ALWAYS use service role to bypass RLS
+async function isStaff(userId: string): Promise<boolean> {
   try {
-    const { data: profile } = await supabase
+    const serviceSupabase = createServiceRoleClient();
+    const { data: profile } = await serviceSupabase
       .from("profiles")
       .select("is_staff, role")
       .eq("id", userId)
@@ -49,7 +47,6 @@ export async function GET(
         `
         *,
         service:services(*),
-        consultant:profiles!consultant_id(id, first_name, last_name, email),
         customer_metrics(*)
       `
       )
@@ -60,8 +57,25 @@ export async function GET(
       return NextResponse.json({ error: "Booking not found" }, { status: 404 });
     }
 
+    // Fetch consultant profile separately if assigned
+    let consultant = null;
+    if (booking.consultant_id) {
+      const { data: consultantProfile } = await serviceSupabase
+        .from("profiles")
+        .select("id, first_name, last_name")
+        .eq("id", booking.consultant_id)
+        .single();
+
+      if (consultantProfile) {
+        consultant = {
+          ...consultantProfile,
+          // Skip email lookup to avoid permissions issues
+        };
+      }
+    }
+
     // Check permissions
-    const staffStatus = await isStaff(authSupabase, user.id);
+    const staffStatus = await isStaff(user.id);
     const isOwner = booking.consultant_id === user.id;
 
     if (!staffStatus && !isOwner) {
@@ -71,6 +85,7 @@ export async function GET(
     // Transform customer_data for frontend consistency
     const transformedBooking = {
       ...booking,
+      consultant,
       customer_data: {
         email: booking.customer_data?.email || "",
         firstName: booking.customer_data?.first_name || "",
@@ -111,7 +126,7 @@ export async function PATCH(
     const { action, consultant_id, status } = body;
 
     // Check staff permissions for most operations
-    const staffStatus = await isStaff(authSupabase, user.id);
+    const staffStatus = await isStaff(user.id);
 
     if (!staffStatus && action !== "update_status") {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
@@ -210,8 +225,7 @@ export async function PATCH(
       .select(
         `
         *,
-        service:services(*),
-        consultant:profiles!consultant_id(id, first_name, last_name, email)
+        service:services(*)
       `
       )
       .single();
@@ -224,6 +238,23 @@ export async function PATCH(
       );
     }
 
+    // Fetch updated consultant profile if assigned
+    let updatedConsultant = null;
+    if (updatedBooking.consultant_id) {
+      const { data: consultantProfile } = await serviceSupabase
+        .from("profiles")
+        .select("id, first_name, last_name")
+        .eq("id", updatedBooking.consultant_id)
+        .single();
+
+      if (consultantProfile) {
+        updatedConsultant = {
+          ...consultantProfile,
+          // Skip email lookup to avoid permissions issues
+        };
+      }
+    }
+
     // Log the action for audit trail
     console.log(
       `📝 Booking ${bookingId} updated by ${user.id}: ${auditMessage}`
@@ -232,6 +263,7 @@ export async function PATCH(
     // Transform customer_data for frontend consistency
     const transformedBooking = {
       ...updatedBooking,
+      consultant: updatedConsultant,
       customer_data: {
         email: updatedBooking.customer_data?.email || "",
         firstName: updatedBooking.customer_data?.first_name || "",

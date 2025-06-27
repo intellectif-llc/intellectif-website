@@ -3,48 +3,11 @@
 import { useState, useEffect, useCallback } from "react";
 import toast from "react-hot-toast";
 import { useAuth } from "@/contexts/AuthContext";
+// Note: Currently using direct API calls instead of centralized hooks due to RLS policy conflicts
+import { BookingData } from "@/lib/booking-service";
 
-interface Booking {
-  id: string;
-  booking_reference: string;
-  scheduled_date: string;
-  scheduled_time: string;
-  scheduled_datetime?: string;
-  status:
-    | "pending"
-    | "confirmed"
-    | "in_progress"
-    | "completed"
-    | "cancelled"
-    | "no_show"
-    | "rescheduled";
-  customer_data: {
-    email: string;
-    firstName: string;
-    lastName: string;
-    phone?: string;
-    company?: string;
-  };
-  project_description: string;
-  service: {
-    name: string;
-    duration_minutes: number;
-  };
-  consultant?: {
-    first_name: string;
-    last_name: string;
-    id?: string;
-  };
-  consultant_id?: string;
-  created_at: string;
-  payment_status: string;
-  payment_amount?: number;
-  // Google Meet integration fields
-  meeting_url?: string;
-  meeting_platform?: string;
-  google_calendar_event_id?: string;
-  google_calendar_link?: string;
-}
+// Use centralized BookingData type
+type Booking = BookingData;
 
 interface UserProfile {
   id: string;
@@ -136,10 +99,8 @@ export default function BookingManager() {
             // No additional params - get all bookings
             break;
         }
-      } else {
-        // Non-staff users only see their own bookings
-        params.append("consultant_id", user!.id);
       }
+      // Note: Non-staff users (customers/consultants) are handled automatically by the API
 
       const url = `/api/bookings${
         params.toString() ? `?${params.toString()}` : ""
@@ -149,17 +110,29 @@ export default function BookingManager() {
       if (response.ok) {
         const data = await response.json();
         setBookings(data.bookings || []);
+        setAccessDenied(false); // Reset access denied state on successful fetch
       } else if (response.status === 401) {
-        console.error("Unauthorized: User is not staff");
+        console.error("Unauthorized: Authentication required");
         setAccessDenied(true);
-        toast.error("Access denied: Staff permissions required");
+        toast.error("Authentication required");
       } else {
         const errorData = await response
           .json()
           .catch(() => ({ error: "Network error" }));
         console.error("Failed to fetch bookings:", errorData);
-        const errorMessage =
-          errorData.details || errorData.error || "Unknown error";
+
+        // Handle different error scenarios
+        let errorMessage = "Unknown error occurred";
+        if (errorData.details && typeof errorData.details === "string") {
+          errorMessage = errorData.details;
+        } else if (errorData.error && typeof errorData.error === "string") {
+          errorMessage = errorData.error;
+        } else if (response.status === 500) {
+          errorMessage = "Database error - please try again or contact support";
+        } else if (response.status === 403) {
+          errorMessage = "Access denied - insufficient permissions";
+        }
+
         toast.error(`Failed to load bookings: ${errorMessage}`);
       }
     } catch (error) {
@@ -203,7 +176,8 @@ export default function BookingManager() {
         `${booking.scheduled_date}T${booking.scheduled_time}:00`
     );
     const endDateTime = new Date(
-      bookingDateTime.getTime() + booking.service.duration_minutes * 60000
+      bookingDateTime.getTime() +
+        (booking.service?.duration_minutes || 60) * 60000
     );
 
     if (now < bookingDateTime) {
@@ -237,6 +211,107 @@ export default function BookingManager() {
         urgent: false,
       };
     }
+  };
+
+  // Professional meeting access control
+  const isMeetingAccessible = (booking: Booking) => {
+    const now = new Date();
+    const bookingDateTime = new Date(
+      booking.scheduled_datetime ||
+        `${booking.scheduled_date}T${booking.scheduled_time}:00`
+    );
+    const endDateTime = new Date(
+      bookingDateTime.getTime() +
+        (booking.service?.duration_minutes || 60) * 60000
+    );
+
+    // Meeting is accessible from 15 minutes before start until end time
+    const accessStartTime = new Date(bookingDateTime.getTime() - 15 * 60000); // 15 minutes before
+
+    return (
+      booking.status === "confirmed" &&
+      booking.meeting_url &&
+      now >= accessStartTime &&
+      now <= endDateTime
+    );
+  };
+
+  const getMeetingAccessStatus = (booking: Booking) => {
+    const now = new Date();
+    const bookingDateTime = new Date(
+      booking.scheduled_datetime ||
+        `${booking.scheduled_date}T${booking.scheduled_time}:00`
+    );
+    const accessStartTime = new Date(bookingDateTime.getTime() - 15 * 60000); // 15 minutes before
+    const endDateTime = new Date(
+      bookingDateTime.getTime() +
+        (booking.service?.duration_minutes || 60) * 60000
+    );
+
+    if (!booking.meeting_url) {
+      return {
+        canJoin: false,
+        message: "Meeting link not available",
+        color: "text-gray-400",
+      };
+    }
+
+    if (booking.status !== "confirmed") {
+      return {
+        canJoin: false,
+        message: "Meeting not confirmed",
+        color: "text-yellow-400",
+      };
+    }
+
+    if (now < accessStartTime) {
+      const minutesUntilAccess = Math.floor(
+        (accessStartTime.getTime() - now.getTime()) / 60000
+      );
+      if (minutesUntilAccess > 60) {
+        const hoursUntilAccess = Math.floor(minutesUntilAccess / 60);
+        return {
+          canJoin: false,
+          message: `Available in ${hoursUntilAccess}h ${minutesUntilAccess % 60}m`,
+          color: "text-blue-400",
+        };
+      }
+      return {
+        canJoin: false,
+        message: `Available in ${minutesUntilAccess}m`,
+        color: "text-blue-400",
+      };
+    }
+
+    if (now >= accessStartTime && now <= bookingDateTime) {
+      return {
+        canJoin: true,
+        message: "Ready to join",
+        color: "text-green-400",
+      };
+    }
+
+    if (now > bookingDateTime && now <= endDateTime) {
+      return {
+        canJoin: true,
+        message: "Meeting in progress",
+        color: "text-green-400",
+      };
+    }
+
+    if (now > endDateTime) {
+      return {
+        canJoin: false,
+        message: "Meeting ended",
+        color: "text-gray-400",
+      };
+    }
+
+    return {
+      canJoin: false,
+      message: "Meeting not accessible",
+      color: "text-gray-400",
+    };
   };
 
   const formatDateTime = (date: string, time: string) => {
@@ -305,18 +380,20 @@ export default function BookingManager() {
     return (
       <div className="text-center py-12">
         <div className="text-6xl mb-4">🔒</div>
-        <h3 className="text-xl font-semibold text-white mb-2">Access Denied</h3>
+        <h3 className="text-xl font-semibold text-white mb-2">
+          Authentication Required
+        </h3>
         <p className="text-gray-400 mb-6">
-          You need staff permissions to access the booking management system.
+          Please sign in to view your bookings and consultations.
         </p>
         <div className="bg-[#1e293b] bg-opacity-60 backdrop-blur-sm rounded-xl p-6 border border-[#6bdcc0]/20 max-w-md mx-auto">
           <h4 className="text-lg font-semibold text-[#6bdcc0] mb-3">
-            To get access:
+            To access your bookings:
           </h4>
           <ol className="text-left text-gray-300 space-y-2">
-            <li>1. Contact your administrator</li>
-            <li>2. Request staff permissions for your account</li>
-            <li>3. They will need to run a SQL script to promote your user</li>
+            <li>1. Make sure you're signed in to your account</li>
+            <li>2. Use the same email address you used for booking</li>
+            <li>3. Contact support if you continue having issues</li>
           </ol>
         </div>
       </div>
@@ -333,16 +410,18 @@ export default function BookingManager() {
         <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
           <div>
             <h2 className="text-2xl font-bold text-white mb-2">
-              Booking Management
+              {userProfile?.is_staff ? "Booking Management" : "My Bookings"}
             </h2>
             <p className="text-gray-300">
-              {isAdmin
-                ? "Manage all bookings and assignments"
-                : "View and manage your assigned bookings"}
+              {userProfile?.is_staff
+                ? isAdmin
+                  ? "Manage all bookings and assignments"
+                  : "View and manage your assigned bookings"
+                : "View your scheduled consultations and meetings"}
             </p>
           </div>
 
-          {/* View Selector for Staff */}
+          {/* View Selector for Staff Only */}
           {userProfile?.is_staff && (
             <div className="flex flex-wrap gap-2">
               <button
@@ -541,10 +620,10 @@ export default function BookingManager() {
                       <div>
                         <span className="text-gray-400">Service:</span>
                         <p className="text-white font-medium">
-                          {booking.service.name}
+                          {booking.service?.name || "Unknown Service"}
                         </p>
                         <p className="text-gray-300">
-                          {booking.service.duration_minutes} minutes
+                          {booking.service?.duration_minutes || 60} minutes
                         </p>
                       </div>
 
@@ -587,39 +666,88 @@ export default function BookingManager() {
 
                 {/* Meeting Action Buttons */}
                 {booking.meeting_url && (
-                  <div className="mt-4 pt-4 border-t border-gray-600/30 flex gap-2">
-                    <a
-                      href={booking.meeting_url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm font-medium transition-colors flex items-center gap-2"
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      🎥 Join Meeting
-                    </a>
-                    {booking.google_calendar_link && (
-                      <a
-                        href={booking.google_calendar_link}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors flex items-center gap-2"
-                        onClick={(e) => e.stopPropagation()}
-                      >
-                        📅 Calendar
-                      </a>
-                    )}
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        navigator.clipboard.writeText(
-                          booking.meeting_url || ""
-                        );
-                        toast.success("Meeting URL copied to clipboard!");
-                      }}
-                      className="px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded-lg text-sm font-medium transition-colors flex items-center gap-2"
-                    >
-                      📋 Copy URL
-                    </button>
+                  <div className="mt-4 pt-4 border-t border-gray-600/30">
+                    {(() => {
+                      const meetingAccess = getMeetingAccessStatus(booking);
+                      return (
+                        <div className="space-y-3">
+                          {/* Meeting Status Indicator */}
+                          <div className="flex items-center gap-2">
+                            <span
+                              className={`text-sm font-medium ${meetingAccess.color}`}
+                            >
+                              🎥 {meetingAccess.message}
+                            </span>
+                            {booking.status === "confirmed" && (
+                              <span className="text-xs px-2 py-1 bg-green-500/20 text-green-400 rounded-full border border-green-500/30">
+                                ✅ Confirmed
+                              </span>
+                            )}
+                          </div>
+
+                          {/* Action Buttons */}
+                          <div className="flex gap-2 flex-wrap">
+                            {(() => {
+                              const meetingAccess =
+                                getMeetingAccessStatus(booking);
+                              return (
+                                <>
+                                  {meetingAccess.canJoin ? (
+                                    <a
+                                      href={booking.meeting_url}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm font-medium transition-colors flex items-center gap-2 animate-pulse"
+                                      onClick={(e) => e.stopPropagation()}
+                                    >
+                                      🎥 Join Meeting
+                                    </a>
+                                  ) : (
+                                    <button
+                                      disabled
+                                      className="px-4 py-2 bg-gray-600 text-gray-300 rounded-lg text-sm font-medium cursor-not-allowed flex items-center gap-2"
+                                      title={meetingAccess.message}
+                                    >
+                                      🎥 Join Meeting
+                                    </button>
+                                  )}
+
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      navigator.clipboard.writeText(
+                                        booking.meeting_url || ""
+                                      );
+                                      toast.success(
+                                        "Meeting URL copied to clipboard!"
+                                      );
+                                    }}
+                                    className="px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded-lg text-sm font-medium transition-colors flex items-center gap-2"
+                                  >
+                                    📋 Copy URL
+                                  </button>
+
+                                  {/* Customer-specific help */}
+                                  {!userProfile?.is_staff && (
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        toast.success(
+                                          "💡 Tip: The 'Join Meeting' button becomes active 15 minutes before your consultation starts!"
+                                        );
+                                      }}
+                                      className="px-3 py-2 bg-blue-500/20 hover:bg-blue-500/30 text-blue-400 rounded-lg text-sm font-medium transition-colors flex items-center gap-2 border border-blue-500/30"
+                                    >
+                                      💡 Help
+                                    </button>
+                                  )}
+                                </>
+                              );
+                            })()}
+                          </div>
+                        </div>
+                      );
+                    })()}
                   </div>
                 )}
               </div>
@@ -706,13 +834,13 @@ export default function BookingManager() {
                   <div>
                     <span className="text-gray-400">Service:</span>
                     <span className="text-white ml-2">
-                      {selectedBooking.service.name}
+                      {selectedBooking.service?.name || "Unknown Service"}
                     </span>
                   </div>
                   <div>
                     <span className="text-gray-400">Duration:</span>
                     <span className="text-white ml-2">
-                      {selectedBooking.service.duration_minutes} minutes
+                      {selectedBooking.service?.duration_minutes || 60} minutes
                     </span>
                   </div>
                   <div>
@@ -785,8 +913,6 @@ export default function BookingManager() {
                     <span className="text-gray-400">Platform:</span>
                     <span className="text-white ml-2">
                       {selectedBooking.meeting_platform || "Google Meet"}
-                      {selectedBooking.google_calendar_event_id &&
-                        " (Google Calendar)"}
                     </span>
                   </div>
 
@@ -814,27 +940,84 @@ export default function BookingManager() {
                   )}
 
                   {/* Meeting Actions */}
-                  <div className="flex gap-2 pt-2">
-                    {selectedBooking.meeting_url && (
-                      <a
-                        href={selectedBooking.meeting_url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm font-medium transition-colors flex items-center gap-2"
-                      >
-                        🎥 Join Meeting
-                      </a>
-                    )}
-                    {selectedBooking.google_calendar_link && (
-                      <a
-                        href={selectedBooking.google_calendar_link}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors flex items-center gap-2"
-                      >
-                        📅 Open Calendar
-                      </a>
-                    )}
+                  <div className="space-y-3">
+                    {/* Meeting Status Indicator */}
+                    {(() => {
+                      const meetingAccess =
+                        getMeetingAccessStatus(selectedBooking);
+                      return (
+                        <div className="flex items-center gap-2">
+                          <span
+                            className={`text-sm font-medium ${meetingAccess.color}`}
+                          >
+                            🎥 {meetingAccess.message}
+                          </span>
+                          {selectedBooking.status === "confirmed" && (
+                            <span className="text-xs px-2 py-1 bg-green-500/20 text-green-400 rounded-full border border-green-500/30">
+                              ✅ Confirmed
+                            </span>
+                          )}
+                        </div>
+                      );
+                    })()}
+
+                    {/* Action Buttons */}
+                    <div className="flex gap-2 flex-wrap">
+                      {(() => {
+                        const meetingAccess =
+                          getMeetingAccessStatus(selectedBooking);
+                        return (
+                          <>
+                            {meetingAccess.canJoin ? (
+                              <a
+                                href={selectedBooking.meeting_url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm font-medium transition-colors flex items-center gap-2 animate-pulse"
+                              >
+                                🎥 Join Meeting
+                              </a>
+                            ) : (
+                              <button
+                                disabled
+                                className="px-4 py-2 bg-gray-600 text-gray-300 rounded-lg text-sm font-medium cursor-not-allowed flex items-center gap-2"
+                                title={meetingAccess.message}
+                              >
+                                🎥 Join Meeting
+                              </button>
+                            )}
+
+                            <button
+                              onClick={() => {
+                                navigator.clipboard.writeText(
+                                  selectedBooking.meeting_url || ""
+                                );
+                                toast.success(
+                                  "Meeting URL copied to clipboard!"
+                                );
+                              }}
+                              className="px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded-lg text-sm font-medium transition-colors flex items-center gap-2"
+                            >
+                              📋 Copy URL
+                            </button>
+
+                            {/* Customer-specific help */}
+                            {!userProfile?.is_staff && (
+                              <button
+                                onClick={() => {
+                                  toast.success(
+                                    "💡 Tip: The 'Join Meeting' button becomes active 15 minutes before your consultation starts!"
+                                  );
+                                }}
+                                className="px-3 py-2 bg-blue-500/20 hover:bg-blue-500/30 text-blue-400 rounded-lg text-sm font-medium transition-colors flex items-center gap-2 border border-blue-500/30"
+                              >
+                                💡 Help
+                              </button>
+                            )}
+                          </>
+                        );
+                      })()}
+                    </div>
                   </div>
                 </div>
               </div>
@@ -890,6 +1073,7 @@ export default function BookingManager() {
                             ...selectedBooking,
                             consultant_id: user!.id,
                             consultant: {
+                              id: user!.id,
                               first_name: userProfile?.first_name || "You",
                               last_name: userProfile?.last_name || "",
                             },
