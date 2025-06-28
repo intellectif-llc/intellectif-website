@@ -12,6 +12,7 @@ export interface BookingEmailData {
   duration: number;
   price?: number;
   meetingUrl?: string;
+  serviceFeatures?: string[]; // Dynamic features from database
 }
 
 // Helper function to format date for email display
@@ -36,10 +37,11 @@ function formatEmailDate(dateString: string): string {
 // Helper function to get environment-based email config
 function getEmailConfig() {
   return {
-    fromEmail: process.env.SES_FROM_EMAIL_AWS || "hello@intellectif.com",
+    fromEmail: process.env.SES_FROM_EMAIL_AWS || "contact@intellectif.com",
     companyName: "Intellectif",
-    companyWebsite: "https://intellectif.com",
-    supportEmail: "admin@intellectif.com",
+    companyWebsite:
+      process.env.NEXT_PUBLIC_SITE_URL || "https://intellectif.com",
+    supportEmail: process.env.SUPPORT_EMAIL || "contact@intellectif.com",
   };
 }
 
@@ -58,6 +60,7 @@ export async function sendBookingConfirmationEmail(data: BookingEmailData) {
         duration: data.duration,
         price: data.price,
         meetingUrl: data.meetingUrl,
+        serviceFeatures: data.serviceFeatures, // Pass dynamic features
         // Pass environment-based values
         companyName: config.companyName,
         companyWebsite: config.companyWebsite,
@@ -93,7 +96,9 @@ Looking forward to speaking with you!
 The ${config.companyName} Team
 
 ---
-If you need to reschedule or have questions, reply to this email or contact us at ${config.supportEmail}
+If you need to reschedule or have questions, reply to this email or contact us at ${
+      config.supportEmail
+    }
     `.trim();
 
     // Send the email
@@ -128,6 +133,7 @@ export async function sendPaymentConfirmationEmail(data: BookingEmailData) {
         duration: data.duration,
         price: data.price,
         meetingUrl: data.meetingUrl,
+        serviceFeatures: data.serviceFeatures, // Pass dynamic features
         // Pass environment-based values
         companyName: config.companyName,
         companyWebsite: config.companyWebsite,

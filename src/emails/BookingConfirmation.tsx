@@ -20,6 +20,7 @@ interface BookingConfirmationProps {
   duration: number;
   price?: number;
   meetingUrl?: string;
+  serviceFeatures?: string[];
   companyName?: string;
   companyWebsite?: string;
   supportEmail?: string;
@@ -35,8 +36,12 @@ export default function BookingConfirmation({
   duration = 60,
   price,
   meetingUrl,
+  serviceFeatures = [
+    "Consultation with our expert team",
+    "Tailored recommendations for your project",
+  ],
   companyName = "Intellectif",
-  supportEmail = "admin@intellectif.com",
+  supportEmail = "contact@intellectif.com",
   logoUrl = `${
     process.env.NEXT_PUBLIC_CLOUDFRONT_URL ||
     "https://dvodqf2plfdel.cloudfront.net"
@@ -115,21 +120,20 @@ export default function BookingConfirmation({
               </Section>
             )}
 
-            {/* What to Expect */}
-            <Section style={expectSection}>
-              <Text style={sectionTitle}>What to Expect</Text>
-              <Text style={paragraph}>
-                During our consultation, we&apos;ll:
-              </Text>
-              <Text style={listItem}>
-                • Discuss your project goals and vision
-              </Text>
-              <Text style={listItem}>
-                • Analyze your technical requirements
-              </Text>
-              <Text style={listItem}>• Provide strategic recommendations</Text>
-              <Text style={listItem}>• Outline next steps and timeline</Text>
-            </Section>
+            {/* Dynamic What to Expect based on Service Features */}
+            {serviceFeatures && serviceFeatures.length > 0 && (
+              <Section style={expectSection}>
+                <Text style={sectionTitle}>What to Expect</Text>
+                <Text style={paragraph}>
+                  During your {serviceName.toLowerCase()}, you&apos;ll receive:
+                </Text>
+                {serviceFeatures.map((feature, index) => (
+                  <Text key={index} style={listItem}>
+                    • {feature}
+                  </Text>
+                ))}
+              </Section>
+            )}
 
             <Hr style={hr} />
 

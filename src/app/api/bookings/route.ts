@@ -317,6 +317,7 @@ export async function POST(request: NextRequest) {
         duration: service.duration_minutes,
         price: service.requires_payment ? service.price : undefined,
         meetingUrl: booking.meeting_url, // Uses Google Meet URL from booking or fallback
+        serviceFeatures: service.features, // Pass dynamic features from database
       });
       console.log("✅ Booking confirmation email sent successfully");
     } catch (emailError) {
