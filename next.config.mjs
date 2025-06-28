@@ -1,8 +1,5 @@
-import { type NextConfig } from "next";
-
 /** @type {import('next').NextConfig} */
-const nextConfig: NextConfig = {
-  // Your 'headers' function can remain if you still need it.
+const nextConfig = {
   async headers() {
     return [
       {

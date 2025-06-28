@@ -203,13 +203,9 @@ export async function POST(request: NextRequest) {
             customerName: `${customerData.firstName} ${customerData.lastName}`,
           };
 
-          console.log(
-            "🎯 Creating Google Meet for consultant:",
-            assignedConsultant.consultant_id
+          const meetingDetails = await GoogleMeetService.createMeeting(
+            meetingOptions
           );
-
-          const meetingDetails =
-            await GoogleMeetService.createMeeting(meetingOptions);
 
           if (meetingDetails) {
             googleMeetData = meetingDetails; // Use the complete payload as returned by the service

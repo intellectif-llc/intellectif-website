@@ -7,22 +7,6 @@ const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 
-// DEBUG: Log environment variable status
-console.log("🔍 SUPABASE CLIENT DEBUG:", {
-  timestamp: new Date().toISOString(),
-  hasUrl: !!supabaseUrl,
-  urlLength: supabaseUrl?.length || 0,
-  urlStart: supabaseUrl?.substring(0, 20) + "...",
-  hasAnonKey: !!supabaseAnonKey,
-  anonKeyLength: supabaseAnonKey?.length || 0,
-  hasServiceKey: !!supabaseServiceKey,
-  serviceKeyLength: supabaseServiceKey?.length || 0,
-  nodeEnv: process.env.NODE_ENV,
-  allEnvKeys: Object.keys(process.env).filter((key) =>
-    key.includes("SUPABASE")
-  ),
-});
-
 // Server-side Supabase client for Server Components
 export const createServerComponentClient = async () => {
   const cookieStore = await cookies();

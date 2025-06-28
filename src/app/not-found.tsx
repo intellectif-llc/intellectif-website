@@ -1,8 +1,6 @@
 "use client";
 
-// Import Link for semantic navigation
 import Link from "next/link";
-import Button from "@/components/ui/Button";
 
 export default function NotFound() {
   return (
@@ -23,14 +21,13 @@ export default function NotFound() {
 
         {/* Action Buttons */}
         <div className="space-y-3 sm:space-y-0 sm:space-x-4 sm:flex sm:justify-center">
-          {/* UPDATED: Button is wrapped in a Link component */}
-          <Link href="/" passHref>
-            <Button size="lg" className="w-full sm:w-auto">
-              Go Home
-            </Button>
+          <Link 
+            href="/"
+            className="inline-block w-full sm:w-auto px-6 py-3 bg-gradient-to-r from-[#6bdcc0] to-[#4ade80] text-[#051028] font-semibold rounded-xl hover:from-[#5bc7ab] hover:to-[#3ab575] transition-all duration-300"
+          >
+            Go Home
           </Link>
 
-          {/* NO CHANGE: This is perfectly fine for going back */}
           <button
             onClick={() => window.history.back()}
             className="w-full sm:w-auto px-6 py-3 text-[#6bdcc0] border border-[#6bdcc0]/30 rounded-xl font-semibold hover:bg-[#6bdcc0]/10 transition-all duration-300"
