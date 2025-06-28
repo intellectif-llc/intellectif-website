@@ -57,7 +57,7 @@ GOOGLE_REFRESH_TOKEN=your_refresh_token
 #    - Set GOOGLE_REFRESH_TOKEN
 
 # Application Settings
-NEXT_PUBLIC_APP_URL=http://localhost:3000
+NEXT_PUBLIC_CLOUDFRONT_URL=http://localhost:3000
 NODE_ENV=development 
 
 # Google Meet Integration requires OAuth setup above

@@ -37,7 +37,10 @@ export default function BookingConfirmation({
   meetingUrl,
   companyName = "Intellectif",
   supportEmail = "admin@intellectif.com",
-  logoUrl = `${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/logo.png`,
+  logoUrl = `${
+    process.env.NEXT_PUBLIC_CLOUDFRONT_URL ||
+    "https://dvodqf2plfdel.cloudfront.net"
+  }/branding/intellectif-logo.png`,
 }: BookingConfirmationProps) {
   const isPaid = price && price > 0;
 
