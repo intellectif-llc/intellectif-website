@@ -512,7 +512,7 @@ export default function CustomerInformation({
               d="M15 19l-7-7 7-7"
             />
           </svg>
-          <span className="relative z-20 font-bold tracking-wide">
+          <span className="relative z-20 font-bold tracking-wide group-hover:text-[#051028] transition-all duration-500">
             Back to Date & Time
           </span>
 
@@ -568,19 +568,19 @@ export default function CustomerInformation({
                   d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
                 ></path>
               </svg>
-              <span className="relative z-20 text-[#051028] font-bold tracking-wide">
+              <span className="relative z-20 text-[#051028] group-hover:text-[#6bdcc0] transition-all duration-500 font-bold tracking-wide">
                 Creating Booking...
               </span>
             </>
           ) : (
             <>
-              <span className="relative z-20 text-[#051028] font-bold tracking-wide">
+              <span className="relative z-20 text-[#051028] group-hover:text-[#6bdcc0] transition-all duration-500 font-bold tracking-wide">
                 {bookingData.service?.price === 0
                   ? "Confirm Booking"
                   : "Proceed to Payment"}
               </span>
               <svg
-                className="w-5 h-5 ml-2 relative z-20 text-[#051028]"
+                className="w-5 h-5 ml-2 relative z-20 text-[#051028] group-hover:text-[#6bdcc0] transition-all duration-500"
                 fill="none"
                 stroke="currentColor"
                 viewBox="0 0 24 24"

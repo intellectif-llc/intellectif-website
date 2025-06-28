@@ -26,8 +26,8 @@ export async function GET(_request: NextRequest) {
       `
       )
       .eq("is_active", true)
-      .order("is_popular", { ascending: false }) // Popular services first
-      .order("price", { ascending: true }); // Then by price (free first)
+      .order("price", { ascending: true }) // Free services first
+      .order("is_popular", { ascending: false }); // Then by popularity
 
     if (error) {
       console.error("Error fetching services:", error);

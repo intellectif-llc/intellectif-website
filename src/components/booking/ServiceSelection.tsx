@@ -201,11 +201,11 @@ export default function ServiceSelection({
                 "0 8px 32px rgba(107, 220, 192, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.2)",
             }}
           >
-            <span className="relative z-20 text-[#051028] font-bold tracking-wide">
+            <span className="relative z-20 text-[#051028] group-hover:text-[#6bdcc0] transition-all duration-500 font-bold tracking-wide">
               Continue to Date Selection
             </span>
             <svg
-              className="w-5 h-5 ml-2 relative z-20 text-[#051028]"
+              className="w-5 h-5 ml-2 relative z-20 text-[#051028] group-hover:text-[#6bdcc0] transition-all duration-500"
               fill="none"
               stroke="currentColor"
               viewBox="0 0 24 24"
