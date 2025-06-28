@@ -59,8 +59,8 @@ export default function BookingConfirmation({
           <Section style={header}>
             <Img
               src={logoUrl}
-              width="150"
-              height="50"
+              width="60"
+              height="60"
               alt={companyName}
               style={logo}
             />
@@ -114,7 +114,7 @@ export default function BookingConfirmation({
                   Join Meeting
                 </Button>
                 <Text style={smallText}>
-                  We&apos;ll send you a reminder 24 hours before your
+                  We&apos;ll send you a reminder 2 hours before your
                   appointment.
                 </Text>
               </Section>
