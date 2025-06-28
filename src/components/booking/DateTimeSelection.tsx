@@ -4,6 +4,7 @@ import {
   useTimeSlots,
   usePrefetchTimeSlots,
 } from "@/hooks/useBookingData";
+import { useAuth } from "@/contexts/AuthContext";
 
 interface DateTimeSelectionProps {
   selectedDateTime: { date: string; time: string } | null;
@@ -26,6 +27,40 @@ export default function DateTimeSelection({
   const [selectedTime, setSelectedTime] = useState(
     selectedDateTime?.time || ""
   );
+  const [isStaff, setIsStaff] = useState(false);
+  const [staffStatusLoading, setStaffStatusLoading] = useState(true);
+  const [hoveredDate, setHoveredDate] = useState<string | null>(null);
+
+  const { user } = useAuth();
+
+  // Check staff status for current user
+  useEffect(() => {
+    const checkStaffStatus = async () => {
+      setStaffStatusLoading(true);
+      if (!user) {
+        setIsStaff(false);
+        setStaffStatusLoading(false);
+        return;
+      }
+
+      try {
+        const response = await fetch("/api/profile");
+        if (response.ok) {
+          const data = await response.json();
+          setIsStaff(data.profile?.is_staff || false);
+        } else {
+          setIsStaff(false);
+        }
+      } catch (error) {
+        console.error("Error checking staff status:", error);
+        setIsStaff(false);
+      } finally {
+        setStaffStatusLoading(false);
+      }
+    };
+
+    checkStaffStatus();
+  }, [user]);
 
   // Use TanStack Query hooks for data fetching
   const {
@@ -50,12 +85,17 @@ export default function DateTimeSelection({
   // Throttled prefetch time slots for better UX when hovering over dates
   const handleDateHover = useCallback(
     (date: string) => {
+      setHoveredDate(date);
       if (date && serviceId && date !== selectedDate) {
         prefetchTimeSlots(date, serviceId);
       }
     },
     [prefetchTimeSlots, serviceId, selectedDate]
   );
+
+  const handleDateLeave = useCallback(() => {
+    setHoveredDate(null);
+  }, []);
 
   const handleDateSelect = (date: string) => {
     setSelectedDate(date);
@@ -72,6 +112,56 @@ export default function DateTimeSelection({
   };
 
   const canContinue = selectedDate && selectedTime;
+
+  // Helper function to get availability display text
+  const getDateAvailabilityText = (date: any) => {
+    // Show slot counts only to staff users
+    if (
+      !staffStatusLoading &&
+      isStaff &&
+      typeof date.totalAvailableSlots === "number"
+    ) {
+      return `${date.totalAvailableSlots} slot${
+        date.totalAvailableSlots !== 1 ? "s" : ""
+      } available`;
+    }
+    
+    // For non-staff users, show "Available"
+    return "Available";
+  };
+
+  // Helper function for time slot display
+  const getTimeSlotDisplay = (time: any) => {
+    // For staff users, show slot counts instead of dots
+    if (
+      !staffStatusLoading &&
+      isStaff &&
+      typeof time.availableSlots === "number"
+    ) {
+      return (
+        <div className="text-xs text-center mt-1 opacity-75">
+          {time.availableSlots} slot{time.availableSlots !== 1 ? "s" : ""}
+        </div>
+      );
+    }
+
+    // For regular users, show the availability dot
+    if (time.available) {
+      return (
+        <div className="flex justify-center mt-1">
+          <div
+            className={`w-2 h-2 rounded-full transition-colors duration-300 ${
+              selectedTime === time.time
+                ? "bg-[#6bdcc0]"
+                : "bg-[#64748b] group-hover:bg-[#6bdcc0]"
+            }`}
+          />
+        </div>
+      );
+    }
+
+    return null;
+  };
 
   return (
     <div className="py-8">
@@ -100,8 +190,9 @@ export default function DateTimeSelection({
         </div>
       )}
 
-      <div className="grid lg:grid-cols-2 gap-12 mb-12">
-        {/* Date Selection */}
+      {/* Responsive Grid Layout */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-12 mb-12">
+        {/* Date Selection - Progressive Disclosure with Optimized Mobile Layout */}
         <div>
           <h3 className="text-xl font-bold text-white mb-6 flex items-center">
             <svg
@@ -114,11 +205,12 @@ export default function DateTimeSelection({
                 strokeLinecap="round"
                 strokeLinejoin="round"
                 strokeWidth={2}
-                d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
+                d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 002 2z"
               />
             </svg>
             Select Date
           </h3>
+          {/* FIXED: Always use 2 columns, even on mobile, to optimize vertical space */}
           <div className="grid grid-cols-2 gap-3">
             {datesLoading ? (
               <div className="col-span-2 text-center py-8">
@@ -159,7 +251,7 @@ export default function DateTimeSelection({
                       strokeLinecap="round"
                       strokeLinejoin="round"
                       strokeWidth={2}
-                      d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
+                      d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 002 2z"
                     />
                   </svg>
                   <p className="text-lg font-medium">
@@ -171,75 +263,80 @@ export default function DateTimeSelection({
                 </div>
               </div>
             ) : (
-              availableDates.map((date) => (
-                <button
-                  key={date.value}
-                  onClick={() => handleDateSelect(date.value)}
-                  onMouseEnter={() => handleDateHover(date.value)}
-                  className={`
-                  group relative p-4 rounded-xl text-left transition-all duration-300 ease-out hover:scale-[1.02] transform
-                  ${
-                    selectedDate === date.value
-                      ? "ring-2 ring-[#6bdcc0]"
-                      : "hover:-translate-y-1"
-                  }
-                `}
-                  style={{
-                    background:
-                      selectedDate === date.value
+              availableDates.map((date) => {
+                const isHovered = hoveredDate === date.value;
+                const isSelected = selectedDate === date.value;
+
+                return (
+                  <button
+                    key={date.value}
+                    onClick={() => handleDateSelect(date.value)}
+                    onMouseEnter={() => handleDateHover(date.value)}
+                    onMouseLeave={handleDateLeave}
+                    className={`
+                      group relative p-3 sm:p-4 rounded-xl text-left transition-all duration-300 ease-out hover:scale-[1.02] transform
+                      ${
+                        isSelected
+                          ? "ring-2 ring-[#6bdcc0]"
+                          : "hover:-translate-y-1"
+                      }
+                    `}
+                    style={{
+                      background: isSelected
                         ? "linear-gradient(135deg, rgba(107, 220, 192, 0.2) 0%, rgba(34, 211, 238, 0.2) 100%)"
                         : "rgba(30, 41, 59, 0.4)",
-                    border:
-                      selectedDate === date.value
+                      border: isSelected
                         ? "2px solid #6bdcc0"
                         : "2px solid rgba(107, 220, 192, 0.2)",
-                    boxShadow:
-                      selectedDate === date.value
+                      boxShadow: isSelected
                         ? "0 8px 32px rgba(107, 220, 192, 0.3)"
                         : "0 4px 16px rgba(107, 220, 192, 0.1)",
-                  }}
-                >
-                  <div
-                    className={`font-semibold transition-colors duration-300 ${
-                      selectedDate === date.value
-                        ? "text-[#6bdcc0]"
-                        : "text-white group-hover:text-[#6bdcc0]"
-                    }`}
+                    }}
                   >
-                    {date.display}
-                  </div>
-                  <div className="text-sm text-[#64748b] mt-1">
-                    {date.totalAvailableSlots} slot
-                    {date.totalAvailableSlots !== 1 ? "s" : ""} available
-                  </div>
-
-                  {/* Selection indicator */}
-                  {selectedDate === date.value && (
-                    <div className="absolute top-3 right-3">
-                      <div className="w-5 h-5 bg-[#6bdcc0] rounded-full flex items-center justify-center">
-                        <svg
-                          className="w-3 h-3 text-[#051028]"
-                          fill="none"
-                          stroke="currentColor"
-                          viewBox="0 0 24 24"
-                        >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth={3}
-                            d="M5 13l4 4L19 7"
-                          />
-                        </svg>
-                      </div>
+                    {/* Date Display - Compact for mobile */}
+                    <div
+                      className={`font-semibold text-sm sm:text-base transition-colors duration-300 ${
+                        isSelected
+                          ? "text-[#6bdcc0]"
+                          : "text-white group-hover:text-[#6bdcc0]"
+                      }`}
+                    >
+                      {date.display}
                     </div>
-                  )}
-                </button>
-              ))
+
+                    {/* Show availability info */}
+                    <div className="text-xs sm:text-sm text-[#64748b] mt-1">
+                      {getDateAvailabilityText(date)}
+                    </div>
+
+                    {/* Selection indicator */}
+                    {isSelected && (
+                      <div className="absolute top-2 right-2 sm:top-3 sm:right-3">
+                        <div className="w-4 h-4 sm:w-5 sm:h-5 bg-[#6bdcc0] rounded-full flex items-center justify-center">
+                          <svg
+                            className="w-2 h-2 sm:w-3 sm:h-3 text-[#051028]"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={3}
+                              d="M5 13l4 4L19 7"
+                            />
+                          </svg>
+                        </div>
+                      </div>
+                    )}
+                  </button>
+                );
+              })
             )}
           </div>
         </div>
 
-        {/* Time Selection */}
+        {/* Time Selection - Compact with Staff Slot Counts */}
         <div>
           <h3 className="text-xl font-bold text-white mb-6 flex items-center">
             <svg
@@ -257,9 +354,9 @@ export default function DateTimeSelection({
             </svg>
             Select Time
           </h3>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-2 xl:grid-cols-3 gap-2">
             {loading ? (
-              <div className="col-span-2 text-center py-8">
+              <div className="col-span-full text-center py-8">
                 <div className="inline-flex items-center px-4 py-2 font-semibold leading-6 text-sm shadow rounded-md text-white bg-[#6bdcc0]/20 transition ease-in-out duration-150">
                   <svg
                     className="animate-spin -ml-1 mr-3 h-5 w-5 text-[#6bdcc0]"
@@ -285,7 +382,7 @@ export default function DateTimeSelection({
                 </div>
               </div>
             ) : timeSlots.length === 0 ? (
-              <div className="col-span-2 text-center py-8">
+              <div className="col-span-full text-center py-8">
                 <div className="text-[#64748b]">
                   {selectedDate
                     ? "No available time slots for this date"
@@ -299,7 +396,7 @@ export default function DateTimeSelection({
                   onClick={() => handleTimeSelect(time.time)}
                   disabled={!selectedDate || !time.available}
                   className={`
-                    group relative p-4 rounded-xl text-left transition-all duration-300 ease-out hover:scale-[1.02] transform
+                    group relative p-2 sm:p-3 rounded-lg text-center transition-all duration-300 ease-out hover:scale-[1.02] transform
                     ${
                       !selectedDate || !time.available
                         ? "opacity-50 cursor-not-allowed"
@@ -323,8 +420,9 @@ export default function DateTimeSelection({
                         : "0 4px 16px rgba(107, 220, 192, 0.1)",
                   }}
                 >
+                  {/* Time Display - Compact */}
                   <div
-                    className={`font-semibold transition-colors duration-300 ${
+                    className={`font-semibold text-xs sm:text-sm transition-colors duration-300 ${
                       selectedTime === time.time
                         ? "text-[#6bdcc0]"
                         : "text-white group-hover:text-[#6bdcc0]"
@@ -332,20 +430,16 @@ export default function DateTimeSelection({
                   >
                     {time.display}
                   </div>
-                  <div className="text-sm text-[#64748b] mt-1">
-                    {time.available
-                      ? `${time.availableSlots} slot${
-                          time.availableSlots !== 1 ? "s" : ""
-                        } available`
-                      : "Unavailable"}
-                  </div>
+
+                  {/* Availability indicator - Staff gets slot counts, regular users get dots */}
+                  {getTimeSlotDisplay(time)}
 
                   {/* Selection indicator */}
                   {selectedTime === time.time && (
-                    <div className="absolute top-3 right-3">
-                      <div className="w-5 h-5 bg-[#6bdcc0] rounded-full flex items-center justify-center">
+                    <div className="absolute top-1 right-1 sm:top-2 sm:right-2">
+                      <div className="w-3 h-3 sm:w-4 sm:h-4 bg-[#6bdcc0] rounded-full flex items-center justify-center">
                         <svg
-                          className="w-3 h-3 text-[#051028]"
+                          className="w-1.5 h-1.5 sm:w-2 sm:h-2 text-[#051028]"
                           fill="none"
                           stroke="currentColor"
                           viewBox="0 0 24 24"
