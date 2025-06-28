@@ -9,35 +9,49 @@ export async function GET(request: NextRequest) {
     const serviceId = searchParams.get("service_id");
     const daysAhead = parseInt(searchParams.get("days_ahead") || "14");
 
-    // Get service duration for availability checking
+    // Get service details including minimum advance hours
     let serviceDuration = 60; // Default
+    let minimumAdvanceHours = 24; // Default to 24 hours if no service specified
+
     if (serviceId) {
       const { data: serviceData } = await supabase
         .from("services")
-        .select("duration_minutes")
+        .select("duration_minutes, minimum_advance_hours")
         .eq("id", serviceId)
         .single();
 
       if (serviceData) {
         serviceDuration = serviceData.duration_minutes;
+        minimumAdvanceHours = serviceData.minimum_advance_hours || 24; // Use service setting or fallback to 24
         console.log("📋 Service data:", {
           serviceId,
           duration: serviceDuration,
+          minimumAdvanceHours,
         });
       }
     }
 
-    // Generate date range to check (timezone-safe)
-    const availableDates = [];
-    const today = new Date();
-    const currentDate = new Date(today);
-    currentDate.setDate(currentDate.getDate() + 1); // Start from tomorrow
+    // Calculate minimum start datetime based on service requirements
+    const now = new Date();
+    const minimumStartTime = new Date(
+      now.getTime() + minimumAdvanceHours * 60 * 60 * 1000
+    );
+
+    // Start checking from the date that meets minimum advance requirement
+    const currentDate = new Date(minimumStartTime);
+    // Reset to start of day to ensure we check full days
+    currentDate.setHours(0, 0, 0, 0);
 
     console.log("📅 Date range generation:", {
-      today: today.toISOString(),
+      now: now.toISOString(),
+      minimumAdvanceHours,
+      minimumStartTime: minimumStartTime.toISOString(),
       startDate: currentDate.toISOString(),
       daysToCheck: daysAhead,
     });
+
+    // Generate date range to check (timezone-safe)
+    const availableDates = [];
 
     for (let i = 0; i < daysAhead; i++) {
       // Generate date string in local timezone to avoid UTC conversion issues
@@ -58,6 +72,15 @@ export async function GET(request: NextRequest) {
 
         for (const timeSlot of timeSlots) {
           console.log(`  ⏰ Checking time slot: ${timeSlot}`);
+
+          // For same day as minimum start time, check if this specific slot meets advance requirement
+          const slotDateTime = new Date(`${dateString}T${timeSlot}:00`);
+          if (slotDateTime < minimumStartTime) {
+            console.log(
+              `  ⏰ Skipping ${timeSlot} - within minimum advance window`
+            );
+            continue;
+          }
 
           // Use buffer-aware function if service ID is provided, otherwise use standard function
           const { data: consultants, error } = serviceId
@@ -187,6 +210,7 @@ export async function GET(request: NextRequest) {
         slots: d.totalAvailableSlots,
       })),
       serviceDuration,
+      minimumAdvanceHours,
       daysChecked: daysAhead,
     });
 
@@ -194,6 +218,7 @@ export async function GET(request: NextRequest) {
       availableDates,
       totalDatesChecked: daysAhead,
       serviceDuration,
+      minimumAdvanceHours,
     });
 
     // Add cache-control headers to prevent caching of availability data

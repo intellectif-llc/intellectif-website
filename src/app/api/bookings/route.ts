@@ -129,6 +129,36 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Service not found" }, { status: 404 });
     }
 
+    // Validate minimum advance time requirement
+    const scheduledDateTime = new Date(`${scheduledDate}T${scheduledTime}:00`);
+    const now = new Date();
+    const minimumAdvanceHours = service.minimum_advance_hours || 24;
+    const minimumStartTime = new Date(
+      now.getTime() + minimumAdvanceHours * 60 * 60 * 1000
+    );
+
+    if (scheduledDateTime < minimumStartTime) {
+      console.log("❌ Booking rejected - insufficient advance time:", {
+        scheduledDateTime: scheduledDateTime.toISOString(),
+        minimumStartTime: minimumStartTime.toISOString(),
+        minimumAdvanceHours,
+        hoursInAdvance:
+          Math.round(
+            ((scheduledDateTime.getTime() - now.getTime()) / (1000 * 60 * 60)) *
+              10
+          ) / 10,
+      });
+
+      return NextResponse.json(
+        {
+          error: `This service requires at least ${minimumAdvanceHours} hours advance notice. Please select a later time slot.`,
+          minimumAdvanceHours,
+          earliestAvailableTime: minimumStartTime.toISOString(),
+        },
+        { status: 400 }
+      );
+    }
+
     // FIXED: Atomic booking creation with race condition protection
     // Instead of separate availability check + booking creation, use a single atomic operation
     console.log("🔧 Creating booking with atomic availability check:", {
@@ -136,10 +166,9 @@ export async function POST(request: NextRequest) {
       target_time: scheduledTime,
       service_id_param: serviceId,
       assignment_strategy: assignmentStrategy || "optimal",
+      minimumAdvanceHours,
+      scheduledDateTime: scheduledDateTime.toISOString(),
     });
-
-    // Create scheduled datetime
-    const scheduledDateTime = new Date(`${scheduledDate}T${scheduledTime}:00`);
 
     // Create or get customer metrics record using service role
     console.log("🔧 Creating service role client for customer metrics...");

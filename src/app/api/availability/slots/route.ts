@@ -34,13 +34,14 @@ export async function GET(request: NextRequest) {
     let service = null;
     let serviceDuration = 60; // Default duration
     let totalServiceDuration = 60; // Default total duration including buffer
+    let minimumAdvanceHours = 24; // Default minimum advance hours
 
     // Fetch service details if service ID is provided
     if (serviceId) {
       const { data: serviceData, error: serviceError } = await supabase
         .from("services")
         .select(
-          "duration_minutes, buffer_before_minutes, buffer_after_minutes, name"
+          "duration_minutes, buffer_before_minutes, buffer_after_minutes, name, minimum_advance_hours"
         )
         .eq("id", serviceId)
         .single();
@@ -56,6 +57,7 @@ export async function GET(request: NextRequest) {
       if (serviceData) {
         service = serviceData;
         serviceDuration = serviceData.duration_minutes;
+        minimumAdvanceHours = serviceData.minimum_advance_hours || 24; // Use service setting or fallback to 24
 
         // Calculate total duration with fallback defaults
         const bufferBefore = serviceData.buffer_before_minutes ?? 0;
@@ -69,10 +71,17 @@ export async function GET(request: NextRequest) {
           bufferBefore,
           bufferAfter,
           totalDuration: totalServiceDuration,
+          minimumAdvanceHours,
           note: "Total duration determines slot intervals",
         });
       }
     }
+
+    // Calculate minimum start datetime for this service
+    const now = new Date();
+    const minimumStartTime = new Date(
+      now.getTime() + minimumAdvanceHours * 60 * 60 * 1000
+    );
 
     // CORRECT LOGIC: Slot intervals MUST match total service duration
     // If consultant is unavailable for 20 minutes total, slots must be 20 minutes apart
@@ -124,6 +133,15 @@ export async function GET(request: NextRequest) {
       console.log(
         `\n⏰ Processing time slot: ${timeString} (needs ${totalServiceDuration}min total)`
       );
+
+      // Check if this specific slot meets minimum advance requirement
+      const slotDateTime = new Date(`${date}T${timeString}:00`);
+      if (slotDateTime < minimumStartTime) {
+        console.log(
+          `  ⏰ Skipping ${timeString} - within minimum advance window (need ${minimumAdvanceHours}h advance)`
+        );
+        continue;
+      }
 
       try {
         // Always use buffer-aware function when service ID is provided
@@ -274,36 +292,29 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    console.log("\n🎯 FINAL TIME SLOTS RESULTS:", {
+    console.log("\n🎯 FINAL SLOT RESULTS:", {
+      totalSlots: timeSlots.length,
+      availableSlots: timeSlots.filter((slot) => slot.available).length,
       date,
-      totalAvailableSlots: timeSlots.length,
-      timeSlots: timeSlots.map((t) => ({
-        time: t.time,
-        display: t.display,
-        availableSlots: t.availableSlots,
-        consultantCount: t.consultants.length,
-      })),
+      serviceId,
       serviceDuration,
       totalServiceDuration,
-      slotInterval,
-      fixedIssue: "Dynamic intervals matching actual consultant availability",
+      minimumAdvanceHours,
+      timeSlots: timeSlots.map((slot) => ({
+        time: slot.time,
+        display: slot.display,
+        available: slot.available,
+        availableSlots: slot.availableSlots,
+      })),
     });
 
     const response = NextResponse.json({
-      date,
       timeSlots,
-      totalSlots: timeSlots.length,
-      serviceDuration: totalServiceDuration, // Use total duration including buffers
-      slotInterval,
-      service: service
-        ? {
-            name: service.name,
-            duration: serviceDuration, // Base service duration
-            totalDuration: totalServiceDuration, // Total including buffers
-            bufferBefore: service.buffer_before_minutes ?? 0,
-            bufferAfter: service.buffer_after_minutes ?? 5,
-          }
-        : null,
+      serviceInfo: service,
+      serviceDuration,
+      totalServiceDuration,
+      minimumAdvanceHours,
+      date,
     });
 
     // Add cache-control headers to prevent caching of availability data
