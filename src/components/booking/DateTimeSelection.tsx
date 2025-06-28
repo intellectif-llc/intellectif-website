@@ -45,23 +45,6 @@ export default function DateTimeSelection({
   const serviceInfo = timeSlotsData?.serviceInfo;
   const serviceDuration = timeSlotsData?.serviceDuration;
 
-  // Debug log to verify service duration and buffer data is available
-  useEffect(() => {
-    if (serviceInfo && serviceDuration) {
-      console.log("🔧 Service configuration loaded:", {
-        name: serviceInfo.name,
-        baseDuration: serviceInfo.duration,
-        totalDuration: serviceInfo.totalDuration || serviceDuration,
-        bufferBefore: serviceInfo.bufferBefore,
-        bufferAfter: serviceInfo.bufferAfter,
-        calculatedTotal:
-          serviceInfo.duration +
-          serviceInfo.bufferBefore +
-          serviceInfo.bufferAfter,
-      });
-    }
-  }, [serviceInfo, serviceDuration]);
-
   const { prefetchTimeSlots } = usePrefetchTimeSlots();
 
   // Throttled prefetch time slots for better UX when hovering over dates
@@ -110,8 +93,8 @@ export default function DateTimeSelection({
               {datesError instanceof Error
                 ? datesError.message
                 : slotsError instanceof Error
-                  ? slotsError.message
-                  : "Failed to load availability data. Please refresh the page."}
+                ? slotsError.message
+                : "Failed to load availability data. Please refresh the page."}
             </p>
           </div>
         </div>
@@ -321,8 +304,8 @@ export default function DateTimeSelection({
                       !selectedDate || !time.available
                         ? "opacity-50 cursor-not-allowed"
                         : selectedTime === time.time
-                          ? "ring-2 ring-[#6bdcc0]"
-                          : "hover:-translate-y-1"
+                        ? "ring-2 ring-[#6bdcc0]"
+                        : "hover:-translate-y-1"
                     }
                   `}
                   style={{
