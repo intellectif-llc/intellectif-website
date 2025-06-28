@@ -183,7 +183,7 @@ const Footer: React.FC = () => {
                         <li key={link.name}>
                           <Link
                             href={link.href}
-                            className="text-gray-300 hover:text-[#6bdcc0] transition-colors duration-300 text-sm hover:translate-x-1 transform inline-block"
+                            className="text-gray-300 hover:text-[#6bdcc0] transition-all duration-300 text-sm hover:translate-x-1 transform inline-block"
                           >
                             {link.name}
                           </Link>
