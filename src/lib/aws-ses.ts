@@ -20,7 +20,7 @@ export async function sendEmail(options: EmailOptions) {
   const { to, subject, htmlContent, textContent } = options;
 
   const command = new SendEmailCommand({
-    Source: process.env.SES_FROM_EMAIL_AWS!,
+    Source: `Intellectif <${process.env.SES_FROM_EMAIL_AWS!}>`,
     Destination: {
       ToAddresses: [to],
     },
