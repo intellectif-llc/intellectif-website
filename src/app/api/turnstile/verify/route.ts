@@ -20,6 +20,21 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const secretKey = process.env.TURNSTILE_SECRET_KEY;
+
+    // Temporary logging for production diagnosis
+    console.log("Turnstile Verify API Route Triggered.");
+    console.log("Has Secret Key:", !!secretKey);
+    if (secretKey) {
+      console.log(
+        "Secret Key Length:",
+        secretKey.length,
+        `(should be 34 characters)`
+      );
+    } else {
+      console.error("TURNSTILE_SECRET_KEY environment variable is NOT set.");
+    }
+
     // Development bypass - remove in production
     if (
       process.env.NODE_ENV === "development" &&
@@ -70,6 +85,8 @@ export async function POST(request: NextRequest) {
     );
 
     const result: TurnstileResponse = await response.json();
+
+    console.log("Cloudflare Verification Outcome:", result);
 
     if (!response.ok) {
       console.error("Turnstile API error:", result);

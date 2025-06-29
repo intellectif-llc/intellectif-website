@@ -1,6 +1,11 @@
 "use client";
 
-import React, { forwardRef, useImperativeHandle, useRef } from "react";
+import React, {
+  forwardRef,
+  useImperativeHandle,
+  useRef,
+  useEffect,
+} from "react";
 import {
   Turnstile as ReactTurnstile,
   type TurnstileInstance,
@@ -23,6 +28,17 @@ const Turnstile = forwardRef<TurnstileRef, TurnstileProps>(
   ({ onSuccess, onError, onExpire, onLoad, className = "" }, ref) => {
     const turnstileRef = useRef<TurnstileInstance>(null);
     const currentToken = useRef<string | null>(null);
+    const widgetRef = useRef<HTMLDivElement>(null);
+    const turnstileStateRef = useRef({
+      token: null as string | null,
+      isVerified: false,
+    });
+
+    // Temporarily log the site key to diagnose production environment variables
+    console.log(
+      "Turnstile Component Initializing. Site Key:",
+      process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY
+    );
 
     useImperativeHandle(ref, () => ({
       reset: () => {
