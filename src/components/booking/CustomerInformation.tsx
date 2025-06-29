@@ -49,6 +49,8 @@ export default function CustomerInformation({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const turnstileRef = useRef<TurnstileRef>(null);
 
+  const createBookingMutation = useCreateBooking();
+
   // Turnstile hook
   const {
     isVerified,
@@ -96,6 +98,10 @@ export default function CustomerInformation({
       newErrors.projectDescription = "Project description is required";
 
     setFormErrors(newErrors);
+    if (Object.keys(newErrors).length === 0) {
+      // Clear the main form error if all individual errors are resolved
+      setFormErrors({});
+    }
     return Object.keys(newErrors).length === 0;
   };
 
@@ -110,18 +116,41 @@ export default function CustomerInformation({
       return;
     }
 
-    setIsSubmitting(true);
     onCustomerDataUpdate(localCustomerData);
 
-    // If there's an onNext function (for paid services), call it.
-    // Otherwise, this component will trigger the final booking submission.
-    if (onNext) {
-      onNext();
+    // If service requires payment, proceed to the payment step
+    if (bookingData.service?.requiresPayment) {
+      if (onNext) {
+        onNext();
+      }
+      return;
     }
-    setIsSubmitting(false);
+
+    // This is a FREE booking, so create it directly.
+    if (!bookingData.service || !bookingData.dateTime) {
+      toast.error(
+        "Missing service or date/time information. Please go back and complete the previous steps."
+      );
+      return;
+    }
+
+    createBookingMutation.mutate({
+      serviceId: bookingData.service.id,
+      scheduledDate: bookingData.dateTime.date,
+      scheduledTime: bookingData.dateTime.time,
+      customerData: {
+        email: localCustomerData.email,
+        firstName: localCustomerData.firstName,
+        lastName: localCustomerData.lastName,
+        phone: localCustomerData.phone,
+        company: localCustomerData.company,
+      },
+      projectDescription: localCustomerData.projectDescription,
+    });
   };
 
-  const isNextDisabled = isSubmitting || isTurnstileLoading || !isVerified;
+  const isNextDisabled =
+    createBookingMutation.isPending || isTurnstileLoading || !isVerified;
 
   return (
     <div className="space-y-8">
@@ -442,11 +471,13 @@ export default function CustomerInformation({
         <Button onClick={onPrevious} variant="outline">
           Previous
         </Button>
-        <Button onClick={handleSubmit} disabled={isNextDisabled}>
-          {isSubmitting
-            ? "Submitting..."
-            : isTurnstileLoading
-            ? "Verifying..."
+        <Button
+          onClick={handleSubmit}
+          disabled={isNextDisabled}
+          isLoading={createBookingMutation.isPending}
+        >
+          {createBookingMutation.isPending
+            ? "Confirming..."
             : bookingData.service?.requiresPayment
             ? "Next: Payment"
             : "Confirm Booking"}
