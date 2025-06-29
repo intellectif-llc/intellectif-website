@@ -20,7 +20,16 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const secretKey = process.env.TURNSTILE_SECRET_KEY;
+    // --- TEMPORARY DEBUGGING - HARDCODED SECRET KEY ---
+    // This is for testing the Amplify environment variable issue.
+    // Replace "YOUR_SECRET_KEY_HERE..." with your actual key.
+    // REMOVE THIS and restore the original line before committing to main branch.
+    const secretKey = "0x4AAAAAABhqZxYCS1rJN_rkkzcNgzR_6FY";
+    // const secretKey = process.env.TURNSTILE_SECRET_KEY;
+    console.log(
+      "--- WARNING: Using a HARDCODED Turnstile secret key for debugging. ---"
+    );
+    // --- END TEMPORARY DEBUGGING ---
 
     // Temporary logging for production diagnosis
     console.log("Turnstile Verify API Route Triggered.");
@@ -35,7 +44,7 @@ export async function POST(request: NextRequest) {
       console.error("TURNSTILE_SECRET_KEY environment variable is NOT set.");
     }
 
-    if (!process.env.TURNSTILE_SECRET_KEY) {
+    if (!secretKey) {
       console.error("TURNSTILE_SECRET_KEY is not configured");
       return NextResponse.json(
         { success: false, error: "Server configuration error" },
@@ -52,7 +61,7 @@ export async function POST(request: NextRequest) {
 
     // Prepare the validation request
     const formData = new FormData();
-    formData.append("secret", process.env.TURNSTILE_SECRET_KEY);
+    formData.append("secret", secretKey);
     formData.append("response", token);
     formData.append("remoteip", ip);
 
