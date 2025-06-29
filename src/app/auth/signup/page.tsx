@@ -1,11 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import React, { useState, useRef } from "react";
 import Link from "next/link";
 import { useAuth } from "@/contexts/AuthContext";
 import Button from "@/components/ui/Button";
-import Turnstile from "@/components/ui/Turnstile";
+import Turnstile, { type TurnstileRef } from "@/components/ui/Turnstile";
 import { useTurnstile } from "@/hooks/useTurnstile";
+import toast from "react-hot-toast";
+import { PhoneInput } from "react-international-phone";
 
 export default function SignUpPage() {
   const [email, setEmail] = useState("");
@@ -18,101 +20,58 @@ export default function SignUpPage() {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [showConsentError, setShowConsentError] = useState(false);
+  const [fullName, setFullName] = useState("");
+  const [phone, setPhone] = useState("");
+  const [company, setCompany] = useState("");
+  const [timezone, setTimezone] = useState(
+    Intl.DateTimeFormat().resolvedOptions().timeZone
+  );
+  const [consent, setConsent] = useState(false);
+  const turnstileRef = useRef<TurnstileRef>(null);
 
   const { signUp } = useAuth();
 
-  // Turnstile integration
   const {
     isVerified,
+    isLoading: isTurnstileLoading,
     error: turnstileError,
-    turnstileRef,
-    handleSuccess: handleTurnstileSuccess,
-    handleError: handleTurnstileError,
-    handleExpire: handleTurnstileExpire,
-    validateToken,
+    handleSuccess,
+    handleError,
+    handleExpire,
     reset: resetTurnstile,
   } = useTurnstile();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    // Reset messages
-    setError("");
-    setSuccess("");
-    setShowConsentError(false);
-
-    // Validation
-    if (
-      !email ||
-      !password ||
-      !confirmPassword ||
-      !firstName.trim() ||
-      !lastName.trim()
-    ) {
-      setError("Please fill in all fields");
-      return;
-    }
-
-    if (password !== confirmPassword) {
-      setError("Passwords do not match");
-      return;
-    }
-
-    if (password.length < 6) {
-      setError("Password must be at least 6 characters long");
-      return;
-    }
-
-    // Validate Terms and Conditions acceptance
-    if (!acceptTerms) {
-      setShowConsentError(true);
-      setError(
-        "You must accept the Terms and Conditions and Privacy Policy to create an account"
+    if (!isVerified) {
+      toast.error(
+        "Please complete the security verification before submitting."
       );
-      return;
-    }
-
-    // Validate Turnstile
-    const isTurnstileValid = await validateToken();
-    if (!isTurnstileValid) {
-      setError("Please complete the security verification");
       return;
     }
 
     setIsLoading(true);
 
-    try {
-      const { error } = await signUp(
-        email,
-        password,
-        `${firstName.trim()} ${lastName.trim()}`
-      );
+    const { error } = await signUp(email, password, {
+      fullName,
+      phone,
+      company,
+      timezone,
+      consent,
+    });
 
-      if (error) {
-        setError(error.message);
-        // Reset Turnstile on error to allow retry
-        resetTurnstile();
-      } else {
-        setSuccess("Check your email for a confirmation link!");
-        // Clear form
-        setEmail("");
-        setPassword("");
-        setConfirmPassword("");
-        setFirstName("");
-        setLastName("");
-        setAcceptTerms(false);
-        setShowConsentError(false);
-        resetTurnstile();
-      }
-    } catch (error) {
-      setError(
-        error instanceof Error ? error.message : "An unexpected error occurred"
-      );
-      // Reset Turnstile on error to allow retry
+    if (error) {
+      toast.error(error.message);
+      // Reset Turnstile on submission failure to allow user to retry
+      turnstileRef.current?.reset();
       resetTurnstile();
-    } finally {
-      setIsLoading(false);
+    } else {
+      toast.success(
+        "Confirmation email sent! Please check your inbox to verify your account."
+      );
     }
+    setIsLoading(false);
   };
 
   const handleConsentChange = (checked: boolean) => {
@@ -123,6 +82,8 @@ export default function SignUpPage() {
       setError("");
     }
   };
+
+  const isSubmitDisabled = isLoading || isTurnstileLoading || !isVerified;
 
   return (
     <div className="min-h-screen bg-[#051028] flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
@@ -282,9 +243,9 @@ export default function SignUpPage() {
             <div className="flex justify-center py-2">
               <Turnstile
                 ref={turnstileRef}
-                onSuccess={handleTurnstileSuccess}
-                onError={handleTurnstileError}
-                onExpire={handleTurnstileExpire}
+                onSuccess={handleSuccess}
+                onError={handleError}
+                onExpire={handleExpire}
               />
             </div>
 
@@ -342,8 +303,8 @@ export default function SignUpPage() {
                         acceptTerms
                           ? "bg-[#6bdcc0] border-[#6bdcc0] text-[#051028]"
                           : showConsentError
-                            ? "border-red-400 bg-red-500/10 hover:border-red-300"
-                            : "border-[#6bdcc0]/50 bg-[#051028]/50 hover:border-[#6bdcc0] hover:bg-[#6bdcc0]/10"
+                          ? "border-red-400 bg-red-500/10 hover:border-red-300"
+                          : "border-[#6bdcc0]/50 bg-[#051028]/50 hover:border-[#6bdcc0] hover:bg-[#6bdcc0]/10"
                       }
                     `}
                   >
@@ -368,7 +329,11 @@ export default function SignUpPage() {
                     id="terms-description"
                     className={`
                       text-sm leading-relaxed cursor-pointer transition-colors duration-200
-                      ${showConsentError ? "text-red-300" : "text-gray-300 hover:text-white"}
+                      ${
+                        showConsentError
+                          ? "text-red-300"
+                          : "text-gray-300 hover:text-white"
+                      }
                     `}
                   >
                     I agree to the{" "}
@@ -421,7 +386,7 @@ export default function SignUpPage() {
               variant="primary"
               size="lg"
               isLoading={isLoading}
-              disabled={isLoading || !isVerified || !acceptTerms}
+              disabled={isSubmitDisabled}
               className="w-full"
             >
               {isLoading ? "Creating Account..." : "Create Account"}

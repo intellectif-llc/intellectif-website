@@ -10,7 +10,13 @@ interface AuthContextType {
   signUp: (
     email: string,
     password: string,
-    fullName: string
+    profileData: {
+      fullName: string;
+      phone?: string;
+      company?: string;
+      timezone?: string;
+      consent?: boolean;
+    }
   ) => Promise<{ error: AuthError | null }>;
   signIn: (
     email: string,
@@ -57,28 +63,38 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => subscription.unsubscribe();
   }, [supabase]);
 
-  const signUp = async (email: string, password: string, fullName: string) => {
-    try {
-      // Parse full name into first and last name
-      const [firstName, ...lastNameParts] = fullName.trim().split(" ");
-      const lastName = lastNameParts.join(" ");
-
-      const { error } = await supabase.auth.signUp({
-        email,
-        password,
-        options: {
-          data: {
-            full_name: fullName,
-            first_name: firstName || "",
-            last_name: lastName || "",
-          },
-          emailRedirectTo: `${window.location.origin}/auth/confirm?next=/dashboard`,
-        },
-      });
-      return { error };
-    } catch (error) {
-      return { error: error as AuthError };
+  const signUp = async (
+    email: string,
+    password: string,
+    profileData: {
+      fullName: string;
+      phone?: string;
+      company?: string;
+      timezone?: string;
+      consent?: boolean;
     }
+  ) => {
+    // Separate first and last name from full name
+    const nameParts = profileData.fullName.trim().split(" ");
+    const firstName = nameParts[0];
+    const lastName = nameParts.slice(1).join(" ") || ""; // Handle names with multiple parts
+
+    const { error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        data: {
+          first_name: firstName,
+          last_name: lastName,
+          full_name: profileData.fullName.trim(),
+          phone: profileData.phone,
+          company: profileData.company,
+          timezone: profileData.timezone,
+          marketing_consent: profileData.consent,
+        },
+      },
+    });
+    return { error };
   };
 
   const signIn = async (email: string, password: string) => {

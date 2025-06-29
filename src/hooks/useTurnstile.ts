@@ -1,149 +1,97 @@
-import { useState, useCallback, useRef } from "react";
-import { toast } from "react-hot-toast";
+"use client";
+
+import { useState, useCallback } from "react";
+import toast from "react-hot-toast";
 
 interface TurnstileState {
-  token: string | null;
   isVerified: boolean;
   isLoading: boolean;
   error: string | null;
 }
 
 export const useTurnstile = () => {
-  const [state, setState] = useState<TurnstileState>({
-    token: null,
+  const [turnstileState, setTurnstileState] = useState<TurnstileState>({
     isVerified: false,
     isLoading: false,
     error: null,
   });
 
-  const turnstileRef = useRef<{
-    reset: () => void;
-    getToken: () => string | null;
-  } | null>(null);
-
-  const reset = useCallback(() => {
-    setState({
-      token: null,
-      isVerified: false,
-      isLoading: false,
-      error: null,
-    });
-
-    if (turnstileRef.current) {
-      turnstileRef.current.reset();
-    }
-  }, []);
-
-  const handleSuccess = useCallback((token: string) => {
-    setState((prev) => ({
-      ...prev,
-      token,
-      isVerified: true,
-      isLoading: false,
-      error: null,
-    }));
-  }, []);
-
-  const handleError = useCallback(() => {
-    setState((prev) => ({
-      ...prev,
-      token: null,
-      isVerified: false,
-      isLoading: false,
-      error: "Security verification failed. Please try again.",
-    }));
-  }, []);
-
-  const handleExpire = useCallback(() => {
-    setState((prev) => ({
-      ...prev,
-      token: null,
-      isVerified: false,
-      isLoading: false,
-      error: "Security verification expired. Please complete it again.",
-    }));
-
-    // Auto-reset the widget
-    reset();
-  }, [reset]);
-
-  const validateToken = useCallback(async (): Promise<boolean> => {
-    if (!state.token) {
-      setState((prev) => ({
-        ...prev,
-        error: "Please complete the security verification first.",
-        isLoading: false,
-      }));
-      return false;
-    }
-
-    setState((prev) => ({
-      ...prev,
-      isLoading: true,
-      error: null,
-    }));
+  const verifyToken = useCallback(async (token: string) => {
+    setTurnstileState({ isLoading: true, isVerified: false, error: null });
 
     try {
       const response = await fetch("/api/turnstile/verify", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          token: state.token,
-        }),
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token }),
       });
 
-      const result = await response.json();
+      const data = await response.json();
 
-      if (result.success) {
-        setState((prev) => ({
-          ...prev,
+      if (data.success) {
+        setTurnstileState({
           isLoading: false,
           isVerified: true,
           error: null,
-        }));
-
-        return true;
+        });
+        toast.success("Security verification complete.");
       } else {
-        setState((prev) => ({
-          ...prev,
-          isLoading: false,
-          error: "Security verification failed. Please try again.",
-          token: null,
-          isVerified: false,
-        }));
-
-        // Reset the widget to allow retry
-        reset();
-
-        toast.error("Security verification failed. Please try again.");
-        return false;
+        throw new Error("Verification failed");
       }
-    } catch (_error) {
-      setState((prev) => ({
-        ...prev,
+    } catch (err) {
+      const errorMessage =
+        "Security verification failed. Please refresh and try again.";
+      setTurnstileState({
         isLoading: false,
-        error: "Network error. Please check your connection and try again.",
-        token: null,
         isVerified: false,
-      }));
-
-      // Reset the widget to allow retry
-      reset();
-
-      toast.error("Network error. Please try again.");
-      return false;
+        error: errorMessage,
+      });
+      toast.error(errorMessage);
     }
-  }, [state.token, reset]);
+  }, []);
+
+  const handleSuccess = useCallback(
+    (token: string) => {
+      // Automatically verify the token on success
+      verifyToken(token);
+    },
+    [verifyToken]
+  );
+
+  const handleError = useCallback(() => {
+    const errorMessage =
+      "Security widget failed to load. Please refresh the page.";
+    setTurnstileState({
+      isLoading: false,
+      isVerified: false,
+      error: errorMessage,
+    });
+    toast.error(errorMessage);
+  }, []);
+
+  const handleExpire = useCallback(() => {
+    const errorMessage = "Security challenge expired. Please try again.";
+    setTurnstileState({
+      isLoading: false,
+      isVerified: false,
+      error: errorMessage,
+    });
+    toast.error(errorMessage);
+  }, []);
+
+  const reset = useCallback(() => {
+    setTurnstileState({
+      isVerified: false,
+      isLoading: false,
+      error: null,
+    });
+  }, []);
 
   return {
-    ...state,
+    ...turnstileState,
     handleSuccess,
     handleError,
-    handleExpire: handleExpire,
-    validateToken,
+    handleExpire,
     reset,
-    turnstileRef,
   };
 };

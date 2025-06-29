@@ -1,11 +1,6 @@
 "use client";
 
-import React, {
-  forwardRef,
-  useImperativeHandle,
-  useRef,
-  useEffect,
-} from "react";
+import React, { forwardRef, useImperativeHandle, useRef } from "react";
 import {
   Turnstile as ReactTurnstile,
   type TurnstileInstance,
@@ -13,61 +8,33 @@ import {
 
 export interface TurnstileRef {
   reset: () => void;
-  getToken: () => string | null;
 }
 
 interface TurnstileProps {
-  onSuccess?: (token: string) => void;
-  onError?: () => void;
-  onExpire?: () => void;
-  onLoad?: () => void;
+  onSuccess: (token: string) => void;
+  onError: () => void;
+  onExpire: () => void;
   className?: string;
 }
 
 const Turnstile = forwardRef<TurnstileRef, TurnstileProps>(
-  ({ onSuccess, onError, onExpire, onLoad, className = "" }, ref) => {
+  ({ onSuccess, onError, onExpire, className = "" }, ref) => {
     const turnstileRef = useRef<TurnstileInstance>(null);
-    const currentToken = useRef<string | null>(null);
-    const widgetRef = useRef<HTMLDivElement>(null);
-    const turnstileStateRef = useRef({
-      token: null as string | null,
-      isVerified: false,
-    });
-
-    // Temporarily log the site key to diagnose production environment variables
-    console.log(
-      "Turnstile Component Initializing. Site Key:",
-      process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY
-    );
 
     useImperativeHandle(ref, () => ({
       reset: () => {
-        if (turnstileRef.current) {
-          turnstileRef.current.reset();
-          currentToken.current = null;
-        }
+        turnstileRef.current?.reset();
       },
-      getToken: () => currentToken.current,
     }));
-
-    const handleSuccess = (token: string) => {
-      currentToken.current = token;
-      onSuccess?.(token);
-    };
-
-    const handleError = () => {
-      currentToken.current = null;
-      onError?.();
-    };
-
-    const handleExpire = () => {
-      currentToken.current = null;
-      onExpire?.();
-    };
 
     // Don't render if site key is missing (fail gracefully)
     if (!process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY) {
-      return null;
+      console.error("Turnstile site key is not configured.");
+      return (
+        <div className="text-red-500 text-sm">
+          Security widget cannot be displayed. Site is not configured correctly.
+        </div>
+      );
     }
 
     return (
@@ -75,15 +42,12 @@ const Turnstile = forwardRef<TurnstileRef, TurnstileProps>(
         <ReactTurnstile
           ref={turnstileRef}
           siteKey={process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY}
-          onSuccess={handleSuccess}
-          onError={handleError}
-          onExpire={handleExpire}
-          onWidgetLoad={onLoad}
+          onSuccess={onSuccess}
+          onError={onError}
+          onExpire={onExpire}
           options={{
             theme: "dark",
             size: "normal",
-            retry: "auto",
-            refreshExpired: "auto",
           }}
         />
       </div>
