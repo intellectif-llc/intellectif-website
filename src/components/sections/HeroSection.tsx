@@ -31,16 +31,15 @@ const HeroSection: React.FC = () => {
           }`}
         >
           <h1 className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-bold mb-6 sm:mb-8 leading-tight px-2">
-            <span className="block text-white mb-2 sm:mb-4">
-              Transform Your Digital
+            <span className="block text-white mb-2 sm:mb-4">Do More</span>
+            <span className="block gradient-text">
+              With The Team You Already Have
             </span>
-            <span className="block gradient-text">Vision Into Reality</span>
           </h1>
 
           <p className="text-lg sm:text-xl md:text-2xl text-[#64748b] mb-8 sm:mb-10 md:mb-12 max-w-3xl mx-auto leading-relaxed px-4">
-            We specialize in cutting-edge web development, cloud solutions, and
-            AI integration to help your business thrive in the digital
-            landscape.
+            We automate the day-to-day, so you can focus on the big picture.
+            It's time to build a more profitable and enjoyable business for you.
           </p>
 
           <div className="flex flex-col sm:flex-row gap-4 sm:gap-6 justify-center items-center px-4">
