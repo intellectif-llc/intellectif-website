@@ -17,6 +17,7 @@ export interface BookingData {
     features: string[];
     popular?: boolean;
     slug: string;
+    requiresPayment?: boolean;
   } | null;
   dateTime: {
     date: string;

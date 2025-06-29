@@ -1,8 +1,11 @@
-import React, { useState } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import toast from "react-hot-toast";
 import { BookingData } from "@/app/booking/page";
-import Turnstile from "@/components/ui/Turnstile";
+import "react-international-phone/style.css";
 import { useTurnstile } from "@/hooks/useTurnstile";
+import Turnstile, { type TurnstileRef } from "@/components/ui/Turnstile";
+import { PhoneInput } from "react-international-phone";
+import Button from "../ui/Button";
 import {
   useCreateBooking,
   useOptimisticTimeSlots,
@@ -32,156 +35,96 @@ export default function CustomerInformation({
   onNext,
   bookingData,
 }: CustomerInformationProps) {
-  const [formData, setFormData] = useState<CustomerData>({
-    firstName: customerData?.firstName || "",
-    lastName: customerData?.lastName || "",
-    email: customerData?.email || "",
-    phone: customerData?.phone || "",
-    company: customerData?.company || "",
-    projectDescription: customerData?.projectDescription || "",
-  });
-
-  const [errors, setErrors] = useState<Partial<CustomerData>>({});
-
-  // TanStack Query hooks
-  const createBookingMutation = useCreateBooking();
-  const { updateTimeSlotOptimistically } = useOptimisticTimeSlots(
-    bookingData.dateTime?.date || "",
-    bookingData.service?.id
+  const [localCustomerData, setLocalCustomerData] = useState<CustomerData>(
+    customerData || {
+      firstName: "",
+      lastName: "",
+      email: "",
+      phone: "",
+      company: "",
+      projectDescription: "",
+    }
   );
+  const [formErrors, setFormErrors] = useState<Record<string, string>>({});
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const turnstileRef = useRef<TurnstileRef>(null);
 
   // Turnstile hook
   const {
-    token: _token,
     isVerified,
-    isLoading: _isLoading,
+    isLoading: isTurnstileLoading,
     error: turnstileError,
-    turnstileRef,
-    handleSuccess: handleTurnstileSuccess,
-    handleError: handleTurnstileError,
-    handleExpire: handleTurnstileExpire,
-    validateToken,
-    reset: _resetTurnstile,
+    handleSuccess,
+    handleError,
+    handleExpire,
+    reset: resetTurnstile,
   } = useTurnstile();
 
-  const handleInputChange = (field: keyof CustomerData, value: string) => {
-    setFormData((prev) => ({ ...prev, [field]: value }));
-    onCustomerDataUpdate({ ...formData, [field]: value });
+  // Reset turnstile if the service changes (e.g. user goes back and picks a new one)
+  useEffect(() => {
+    resetTurnstile();
+    turnstileRef.current?.reset();
+  }, [bookingData.service?.id, resetTurnstile]);
 
-    // Clear error when user starts typing
-    if (errors[field]) {
-      setErrors((prev) => ({ ...prev, [field]: undefined }));
+  const handleInputChange = (field: keyof CustomerData, value: string) => {
+    setLocalCustomerData((prev) => ({ ...prev, [field]: value }));
+    if (formErrors[field]) {
+      setFormErrors((prev) => {
+        const newErrors = { ...prev };
+        delete newErrors[field];
+        return newErrors;
+      });
     }
+    return true;
   };
 
   const validateForm = () => {
-    const newErrors: Partial<CustomerData> = {};
+    const newErrors: Record<string, string> = {};
 
-    if (!formData.firstName.trim())
+    if (!localCustomerData.firstName.trim())
       newErrors.firstName = "First name is required";
-    if (!formData.lastName.trim()) newErrors.lastName = "Last name is required";
-    if (!formData.email.trim()) newErrors.email = "Email is required";
-    else if (!/\S+@\S+\.\S+/.test(formData.email))
+    if (!localCustomerData.lastName.trim())
+      newErrors.lastName = "Last name is required";
+    if (!localCustomerData.email.trim()) newErrors.email = "Email is required";
+    else if (!/\S+@\S+\.\S+/.test(localCustomerData.email))
       newErrors.email = "Email is invalid";
-    if (!formData.phone.trim()) newErrors.phone = "Phone number is required";
-    if (!formData.company.trim())
+    if (!localCustomerData.phone.trim())
+      newErrors.phone = "Phone number is required";
+    if (!localCustomerData.company.trim())
       newErrors.company = "Company name is required";
-    if (!formData.projectDescription.trim())
+    if (!localCustomerData.projectDescription.trim())
       newErrors.projectDescription = "Project description is required";
 
-    setErrors(newErrors);
+    setFormErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
 
   const handleSubmit = async () => {
-    if (!validateForm()) return;
-
-    // Validate Turnstile first
-    const isTurnstileValid = await validateToken();
-    if (!isTurnstileValid) {
+    if (!validateForm()) {
+      toast.error("Please fill in all required fields correctly.");
       return;
     }
 
-    // Update customer data in parent component
-    onCustomerDataUpdate({
-      firstName: formData.firstName,
-      lastName: formData.lastName,
-      email: formData.email,
-      phone: formData.phone,
-      company: formData.company,
-      projectDescription: formData.projectDescription,
-    });
-
-    // Check if this is a paid service
-    const isPaidService =
-      bookingData.service?.price && bookingData.service.price > 0;
-
-    if (isPaidService) {
-      // For paid services, proceed to payment step
-      // The booking will be created after successful payment
-      console.log("Paid service detected - proceeding to payment step");
-      onNext?.(); // Call onNext to proceed to payment step
+    if (!isVerified) {
+      toast.error("Please complete the security verification to continue.");
       return;
     }
 
-    // For free services, create the booking immediately
-    console.log("Free service detected - creating booking immediately");
+    setIsSubmitting(true);
+    onCustomerDataUpdate(localCustomerData);
 
-    // Optimistically update the UI (reduce available slots)
-    if (bookingData.dateTime?.time) {
-      updateTimeSlotOptimistically(bookingData.dateTime.time, true);
+    // If there's an onNext function (for paid services), call it.
+    // Otherwise, this component will trigger the final booking submission.
+    if (onNext) {
+      onNext();
     }
-
-    // Use TanStack Query mutation for free bookings
-    createBookingMutation.mutate(
-      {
-        serviceId: bookingData.service?.id || "",
-        scheduledDate: bookingData.dateTime?.date || "",
-        scheduledTime: bookingData.dateTime?.time || "",
-        customerData: {
-          email: formData.email,
-          firstName: formData.firstName,
-          lastName: formData.lastName,
-          phone: formData.phone,
-          company: formData.company,
-        },
-        projectDescription: formData.projectDescription,
-        assignmentStrategy: "optimal",
-      },
-      {
-        onSuccess: (result) => {
-          // Show success details
-          toast.success(
-            `Booking confirmed! Reference: ${result.booking.bookingReference}`,
-            {
-              duration: 6000,
-            }
-          );
-
-          console.log("Free booking created:", result.booking);
-
-          // Reset form after successful submission
-          setTimeout(() => {
-            window.location.href = "/"; // Or navigate to a confirmation page
-          }, 3000);
-        },
-        onError: () => {
-          // Revert optimistic update on error
-          if (bookingData.dateTime?.time) {
-            updateTimeSlotOptimistically(bookingData.dateTime.time, false);
-          }
-        },
-      }
-    );
+    setIsSubmitting(false);
   };
 
-  const canSubmit =
-    Object.values(formData).every((value) => value.trim() !== "") &&
-    isVerified &&
-    !createBookingMutation.isPending;
+  const isNextDisabled = isSubmitting || isTurnstileLoading || !isVerified;
 
   return (
-    <div className="py-8">
+    <div className="space-y-8">
       <div className="text-center mb-12">
         <h2 className="text-3xl sm:text-4xl font-bold text-white mb-4">
           Complete Your Booking
@@ -228,20 +171,20 @@ export default function CustomerInformation({
                 </label>
                 <input
                   type="text"
-                  value={formData.firstName}
+                  value={localCustomerData.firstName}
                   onChange={(e) =>
                     handleInputChange("firstName", e.target.value)
                   }
                   className={`w-full px-4 py-3 rounded-xl bg-[#051028] border-2 text-white placeholder-[#64748b] transition-all duration-300 focus:outline-none focus:ring-4 focus:ring-[#6bdcc0]/30 ${
-                    errors.firstName
+                    formErrors.firstName
                       ? "border-red-500 focus:border-red-500"
                       : "border-[#64748b] focus:border-[#6bdcc0]"
                   }`}
                   placeholder="Enter your first name"
                 />
-                {errors.firstName && (
+                {formErrors.firstName && (
                   <p className="text-red-400 text-sm mt-2">
-                    {errors.firstName}
+                    {formErrors.firstName}
                   </p>
                 )}
               </div>
@@ -253,19 +196,21 @@ export default function CustomerInformation({
                 </label>
                 <input
                   type="text"
-                  value={formData.lastName}
+                  value={localCustomerData.lastName}
                   onChange={(e) =>
                     handleInputChange("lastName", e.target.value)
                   }
                   className={`w-full px-4 py-3 rounded-xl bg-[#051028] border-2 text-white placeholder-[#64748b] transition-all duration-300 focus:outline-none focus:ring-4 focus:ring-[#6bdcc0]/30 ${
-                    errors.lastName
+                    formErrors.lastName
                       ? "border-red-500 focus:border-red-500"
                       : "border-[#64748b] focus:border-[#6bdcc0]"
                   }`}
                   placeholder="Enter your last name"
                 />
-                {errors.lastName && (
-                  <p className="text-red-400 text-sm mt-2">{errors.lastName}</p>
+                {formErrors.lastName && (
+                  <p className="text-red-400 text-sm mt-2">
+                    {formErrors.lastName}
+                  </p>
                 )}
               </div>
 
@@ -276,17 +221,19 @@ export default function CustomerInformation({
                 </label>
                 <input
                   type="email"
-                  value={formData.email}
+                  value={localCustomerData.email}
                   onChange={(e) => handleInputChange("email", e.target.value)}
                   className={`w-full px-4 py-3 rounded-xl bg-[#051028] border-2 text-white placeholder-[#64748b] transition-all duration-300 focus:outline-none focus:ring-4 focus:ring-[#6bdcc0]/30 ${
-                    errors.email
+                    formErrors.email
                       ? "border-red-500 focus:border-red-500"
                       : "border-[#64748b] focus:border-[#6bdcc0]"
                   }`}
                   placeholder="your.email@company.com"
                 />
-                {errors.email && (
-                  <p className="text-red-400 text-sm mt-2">{errors.email}</p>
+                {formErrors.email && (
+                  <p className="text-red-400 text-sm mt-2">
+                    {formErrors.email}
+                  </p>
                 )}
               </div>
 
@@ -295,19 +242,21 @@ export default function CustomerInformation({
                 <label className="block text-sm font-semibold text-[#6bdcc0] mb-2">
                   Phone Number *
                 </label>
-                <input
-                  type="tel"
-                  value={formData.phone}
-                  onChange={(e) => handleInputChange("phone", e.target.value)}
+                <PhoneInput
+                  defaultCountry="us"
+                  value={localCustomerData.phone}
+                  onChange={(value) => handleInputChange("phone", value)}
                   className={`w-full px-4 py-3 rounded-xl bg-[#051028] border-2 text-white placeholder-[#64748b] transition-all duration-300 focus:outline-none focus:ring-4 focus:ring-[#6bdcc0]/30 ${
-                    errors.phone
+                    formErrors.phone
                       ? "border-red-500 focus:border-red-500"
                       : "border-[#64748b] focus:border-[#6bdcc0]"
                   }`}
                   placeholder="+1 (555) 123-4567"
                 />
-                {errors.phone && (
-                  <p className="text-red-400 text-sm mt-2">{errors.phone}</p>
+                {formErrors.phone && (
+                  <p className="text-red-400 text-sm mt-2">
+                    {formErrors.phone}
+                  </p>
                 )}
               </div>
 
@@ -318,17 +267,19 @@ export default function CustomerInformation({
                 </label>
                 <input
                   type="text"
-                  value={formData.company}
+                  value={localCustomerData.company}
                   onChange={(e) => handleInputChange("company", e.target.value)}
                   className={`w-full px-4 py-3 rounded-xl bg-[#051028] border-2 text-white placeholder-[#64748b] transition-all duration-300 focus:outline-none focus:ring-4 focus:ring-[#6bdcc0]/30 ${
-                    errors.company
+                    formErrors.company
                       ? "border-red-500 focus:border-red-500"
                       : "border-[#64748b] focus:border-[#6bdcc0]"
                   }`}
                   placeholder="Your Company Name"
                 />
-                {errors.company && (
-                  <p className="text-red-400 text-sm mt-2">{errors.company}</p>
+                {formErrors.company && (
+                  <p className="text-red-400 text-sm mt-2">
+                    {formErrors.company}
+                  </p>
                 )}
               </div>
 
@@ -338,36 +289,34 @@ export default function CustomerInformation({
                   Project Description *
                 </label>
                 <textarea
-                  value={formData.projectDescription}
+                  value={localCustomerData.projectDescription}
                   onChange={(e) =>
                     handleInputChange("projectDescription", e.target.value)
                   }
                   rows={4}
                   className={`w-full px-4 py-3 rounded-xl bg-[#051028] border-2 text-white placeholder-[#64748b] transition-all duration-300 focus:outline-none focus:ring-4 focus:ring-[#6bdcc0]/30 resize-none ${
-                    errors.projectDescription
+                    formErrors.projectDescription
                       ? "border-red-500 focus:border-red-500"
                       : "border-[#64748b] focus:border-[#6bdcc0]"
                   }`}
                   placeholder="Please describe your project, goals, and what you're looking to achieve..."
                 />
-                {errors.projectDescription && (
+                {formErrors.projectDescription && (
                   <p className="text-red-400 text-sm mt-2">
-                    {errors.projectDescription}
+                    {formErrors.projectDescription}
                   </p>
                 )}
               </div>
 
-              {/* Turnstile Widget - Clean, minimal integration */}
+              {/* Turnstile Integration */}
               <div className="md:col-span-2 flex justify-center py-4">
                 <Turnstile
                   ref={turnstileRef}
-                  onSuccess={handleTurnstileSuccess}
-                  onError={handleTurnstileError}
-                  onExpire={handleTurnstileExpire}
+                  onSuccess={handleSuccess}
+                  onError={handleError}
+                  onExpire={handleExpire}
                 />
               </div>
-
-              {/* Turnstile Error (if any) */}
               {turnstileError && (
                 <div className="md:col-span-2 p-3 bg-red-500/10 border border-red-500/20 rounded-lg">
                   <p className="text-red-400 text-sm text-center">
@@ -489,131 +438,19 @@ export default function CustomerInformation({
       </div>
 
       {/* Navigation Buttons */}
-      <div className="flex flex-col sm:flex-row gap-4 justify-between mt-12">
-        <button
-          onClick={onPrevious}
-          className="group relative inline-flex items-center justify-center px-8 py-4 text-lg font-bold text-[#6bdcc0] rounded-2xl transition-all duration-500 ease-out hover:scale-[1.02] shadow-xl focus:outline-none focus:ring-4 focus:ring-[#6bdcc0]/30 focus:ring-offset-2 focus:ring-offset-[#051028] transform hover:-translate-y-2 overflow-hidden backdrop-blur-sm"
-          style={{
-            background: "rgba(30, 41, 59, 0.4)",
-            border: "2px solid #6bdcc0",
-            boxShadow: "0 8px 32px rgba(107, 220, 192, 0.2)",
-          }}
-        >
-          <svg
-            className="w-5 h-5 mr-2 relative z-20 text-[#6bdcc0]"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M15 19l-7-7 7-7"
-            />
-          </svg>
-          <span className="relative z-20 font-bold tracking-wide group-hover:text-[#051028] transition-all duration-500">
-            Back to Date & Time
-          </span>
-
-          {/* Hover Effects */}
-          <div
-            className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-all duration-500 ease-out rounded-2xl"
-            style={{
-              background:
-                "linear-gradient(135deg, #22d3ee 0%, #0ea5e9 50%, #6bdcc0 100%)",
-              boxShadow: "inset 0 1px 0 rgba(255, 255, 255, 0.2)",
-            }}
-          ></div>
-        </button>
-
-        <button
-          onClick={handleSubmit}
-          disabled={!canSubmit || createBookingMutation.isPending}
-          className={`group relative inline-flex items-center justify-center px-10 py-4 text-lg font-bold rounded-2xl transition-all duration-500 ease-out shadow-xl focus:outline-none focus:ring-4 focus:ring-[#6bdcc0]/30 focus:ring-offset-2 focus:ring-offset-[#051028] transform overflow-hidden backdrop-blur-sm ${
-            canSubmit && !createBookingMutation.isPending
-              ? "hover:scale-[1.02] hover:-translate-y-2"
-              : "opacity-50 cursor-not-allowed"
-          }`}
-          style={{
-            background:
-              canSubmit && !createBookingMutation.isPending
-                ? "linear-gradient(135deg, #6bdcc0 0%, #22d3ee 50%, #0ea5e9 100%)"
-                : "rgba(100, 116, 139, 0.5)",
-            boxShadow:
-              canSubmit && !createBookingMutation.isPending
-                ? "0 8px 32px rgba(107, 220, 192, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.2)"
-                : "0 4px 16px rgba(100, 116, 139, 0.2)",
-          }}
-        >
-          {createBookingMutation.isPending ? (
-            <>
-              <svg
-                className="animate-spin -ml-1 mr-3 h-5 w-5 text-[#051028]"
-                xmlns="http://www.w3.org/2000/svg"
-                fill="none"
-                viewBox="0 0 24 24"
-              >
-                <circle
-                  className="opacity-25"
-                  cx="12"
-                  cy="12"
-                  r="10"
-                  stroke="currentColor"
-                  strokeWidth="4"
-                ></circle>
-                <path
-                  className="opacity-75"
-                  fill="currentColor"
-                  d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                ></path>
-              </svg>
-              <span className="relative z-20 text-[#051028] group-hover:text-[#6bdcc0] transition-all duration-500 font-bold tracking-wide">
-                Creating Booking...
-              </span>
-            </>
-          ) : (
-            <>
-              <span className="relative z-20 text-[#051028] group-hover:text-[#6bdcc0] transition-all duration-500 font-bold tracking-wide">
-                {bookingData.service?.price === 0
-                  ? "Confirm Booking"
-                  : "Proceed to Payment"}
-              </span>
-              <svg
-                className="w-5 h-5 ml-2 relative z-20 text-[#051028] group-hover:text-[#6bdcc0] transition-all duration-500"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M5 13l4 4L19 7"
-                />
-              </svg>
-            </>
-          )}
-
-          {/* Hover Effects */}
-          {canSubmit && (
-            <>
-              <div
-                className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-all duration-500 ease-out rounded-2xl"
-                style={{
-                  background: "rgba(5, 16, 40, 0.95)",
-                  border: "2px solid #6bdcc0",
-                  boxShadow:
-                    "0 0 20px rgba(107, 220, 192, 0.6), 0 0 40px rgba(107, 220, 192, 0.4)",
-                }}
-              ></div>
-
-              <div className="absolute inset-0 opacity-0 group-hover:opacity-30 transition-opacity duration-700">
-                <div className="absolute inset-0 -skew-x-12 bg-gradient-to-r from-transparent via-white/20 to-transparent animate-pulse"></div>
-              </div>
-            </>
-          )}
-        </button>
+      <div className="flex justify-between items-center pt-6">
+        <Button onClick={onPrevious} variant="outline">
+          Previous
+        </Button>
+        <Button onClick={handleSubmit} disabled={isNextDisabled}>
+          {isSubmitting
+            ? "Submitting..."
+            : isTurnstileLoading
+            ? "Verifying..."
+            : bookingData.service?.requiresPayment
+            ? "Next: Payment"
+            : "Confirm Booking"}
+        </Button>
       </div>
     </div>
   );

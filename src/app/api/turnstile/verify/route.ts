@@ -35,20 +35,6 @@ export async function POST(request: NextRequest) {
       console.error("TURNSTILE_SECRET_KEY environment variable is NOT set.");
     }
 
-    // Development bypass - remove in production
-    if (
-      process.env.NODE_ENV === "development" &&
-      process.env.BYPASS_TURNSTILE === "true"
-    ) {
-      console.log("BYPASSING Turnstile verification in development");
-      return NextResponse.json({
-        success: true,
-        challengeTs: new Date().toISOString(),
-        hostname: "localhost",
-        bypass: true,
-      });
-    }
-
     if (!process.env.TURNSTILE_SECRET_KEY) {
       console.error("TURNSTILE_SECRET_KEY is not configured");
       return NextResponse.json(
