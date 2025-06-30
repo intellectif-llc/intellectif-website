@@ -8,6 +8,7 @@ import Turnstile, { type TurnstileRef } from "@/components/ui/Turnstile";
 import { useTurnstile } from "@/hooks/useTurnstile";
 import toast from "react-hot-toast";
 import { PhoneInput } from "react-international-phone";
+import SignUpSuccessModal from "@/components/auth/SignUpSuccessModal";
 
 export default function SignUpPage() {
   const [email, setEmail] = useState("");
@@ -18,9 +19,7 @@ export default function SignUpPage() {
   const [acceptTerms, setAcceptTerms] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
-  const [success, setSuccess] = useState("");
   const [showConsentError, setShowConsentError] = useState(false);
-  const [fullName, setFullName] = useState("");
   const [phone, setPhone] = useState("");
   const [company, setCompany] = useState("");
   const [timezone, setTimezone] = useState(
@@ -28,6 +27,10 @@ export default function SignUpPage() {
   );
   const [consent, setConsent] = useState(false);
   const turnstileRef = useRef<TurnstileRef>(null);
+
+  // State for the success modal
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [submittedEmail, setSubmittedEmail] = useState("");
 
   const { signUp } = useAuth();
 
@@ -41,17 +44,43 @@ export default function SignUpPage() {
     reset: resetTurnstile,
   } = useTurnstile();
 
+  const resetForm = () => {
+    setEmail("");
+    setPassword("");
+    setConfirmPassword("");
+    setFirstName("");
+    setLastName("");
+    setPhone("");
+    setCompany("");
+    setAcceptTerms(false);
+    setConsent(false);
+    resetTurnstile();
+    turnstileRef.current?.reset();
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setError("");
+    setShowConsentError(false);
 
     if (!isVerified) {
-      toast.error(
-        "Please complete the security verification before submitting."
+      return toast.error("Please complete the security verification.");
+    }
+
+    if (password !== confirmPassword) {
+      return toast.error("Passwords do not match.");
+    }
+
+    if (!acceptTerms) {
+      setShowConsentError(true);
+      return toast.error(
+        "You must accept the Terms and Conditions and Privacy Policy."
       );
-      return;
     }
 
     setIsLoading(true);
+
+    const fullName = `${firstName.trim()} ${lastName.trim()}`;
 
     const { error } = await signUp(email, password, {
       fullName,
@@ -61,17 +90,19 @@ export default function SignUpPage() {
       consent,
     });
 
+    setIsLoading(false);
+
     if (error) {
       toast.error(error.message);
       // Reset Turnstile on submission failure to allow user to retry
       turnstileRef.current?.reset();
       resetTurnstile();
     } else {
-      toast.success(
-        "Confirmation email sent! Please check your inbox to verify your account."
-      );
+      toast.success("Confirmation email sent!");
+      setSubmittedEmail(email);
+      setShowSuccessModal(true);
+      resetForm();
     }
-    setIsLoading(false);
   };
 
   const handleConsentChange = (checked: boolean) => {
@@ -87,6 +118,11 @@ export default function SignUpPage() {
 
   return (
     <div className="min-h-screen bg-[#051028] flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
+      <SignUpSuccessModal
+        isOpen={showSuccessModal}
+        onClose={() => setShowSuccessModal(false)}
+        email={submittedEmail}
+      />
       <div className="max-w-md w-full space-y-8">
         {/* Header */}
         <div className="text-center">
@@ -262,13 +298,6 @@ export default function SignUpPage() {
             {error && !showConsentError && (
               <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-4">
                 <p className="text-red-400 text-sm">{error}</p>
-              </div>
-            )}
-
-            {/* Success Message */}
-            {success && (
-              <div className="bg-green-500/10 border border-green-500/30 rounded-xl p-4">
-                <p className="text-green-400 text-sm">{success}</p>
               </div>
             )}
 
