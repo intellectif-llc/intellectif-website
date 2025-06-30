@@ -155,3 +155,24 @@ body {
   background-color: rgba(107, 220, 192, 0.1) !important;
   color: #6bdcc0 !important;
 }
+
+.phone-input-container
+  .react-international-phone-country-selector-list__list-item--focused {
+  background-color: #6bdcc0 !important;
+  color: #051028 !important;
+}
+
+/* FIX: Override input styles to match the form theme */
+.phone-input-container .react-international-phone-input {
+  background-color: #051028 !important;
+  color: white !important;
+  border-radius: 0.75rem; /* 12px */
+  padding-left: 1rem;
+  padding-right: 1rem;
+}
+
+/* FIX: Adjust country selector button background */
+.phone-input-container .react-international-phone-country-selector-button {
+  background-color: #051028 !important;
+  border-radius: 0.75rem 0 0 0.75rem;
+}

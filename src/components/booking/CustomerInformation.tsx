@@ -10,6 +10,8 @@ import {
   useCreateBooking,
   useOptimisticTimeSlots,
 } from "@/hooks/useBookingData";
+import { useRouter } from "next/navigation";
+import BookingSuccessModal from "./BookingSuccessModal";
 
 interface CustomerData {
   firstName: string;
@@ -26,6 +28,15 @@ interface CustomerInformationProps {
   onPrevious: () => void;
   onNext?: () => void; // Add onNext for paid services
   bookingData: BookingData;
+}
+
+// Define the shape of the confirmed booking for the modal
+interface ConfirmedBookingDetails {
+  booking_reference: string;
+  service: { name?: string };
+  scheduled_datetime: string;
+  status: string;
+  payment_status?: string;
 }
 
 export default function CustomerInformation({
@@ -48,8 +59,14 @@ export default function CustomerInformation({
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const turnstileRef = useRef<TurnstileRef>(null);
+  const router = useRouter();
 
   const createBookingMutation = useCreateBooking();
+
+  // State for the success modal
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [confirmedBooking, setConfirmedBooking] =
+    useState<ConfirmedBookingDetails | null>(null);
 
   // Turnstile hook
   const {
@@ -134,355 +151,395 @@ export default function CustomerInformation({
       return;
     }
 
-    createBookingMutation.mutate({
-      serviceId: bookingData.service.id,
-      scheduledDate: bookingData.dateTime.date,
-      scheduledTime: bookingData.dateTime.time,
-      customerData: {
-        email: localCustomerData.email,
-        firstName: localCustomerData.firstName,
-        lastName: localCustomerData.lastName,
-        phone: localCustomerData.phone,
-        company: localCustomerData.company,
+    createBookingMutation.mutate(
+      {
+        serviceId: bookingData.service.id,
+        scheduledDate: bookingData.dateTime.date,
+        scheduledTime: bookingData.dateTime.time,
+        customerData: {
+          email: localCustomerData.email,
+          firstName: localCustomerData.firstName,
+          lastName: localCustomerData.lastName,
+          phone: localCustomerData.phone,
+          company: localCustomerData.company,
+        },
+        projectDescription: localCustomerData.projectDescription,
       },
-      projectDescription: localCustomerData.projectDescription,
-    });
+      {
+        onSuccess: (data) => {
+          // On success, show the modal with the booking details
+          if (data.booking) {
+            setConfirmedBooking({
+              booking_reference: data.booking.bookingReference,
+              service: data.booking.service as { name?: string },
+              scheduled_datetime: data.booking.scheduledDateTime,
+              status: data.booking.status,
+              payment_status: data.booking.paymentStatus,
+            });
+            setShowSuccessModal(true);
+          } else {
+            toast.error(
+              "Booking created, but failed to show details. Please check your dashboard."
+            );
+          }
+        },
+        onError: (error) => {
+          toast.error(
+            `Booking failed: ${error.message || "An unknown error occurred."}`
+          );
+          resetTurnstile();
+          turnstileRef.current?.reset();
+        },
+      }
+    );
   };
 
   const isNextDisabled =
     createBookingMutation.isPending || isTurnstileLoading || !isVerified;
 
   return (
-    <div className="space-y-8">
-      <div className="text-center mb-12">
-        <h2 className="text-3xl sm:text-4xl font-bold text-white mb-4">
-          Complete Your Booking
-        </h2>
-        <p className="text-lg text-[#64748b] max-w-2xl mx-auto">
-          Please provide your information to confirm your consultation
-          appointment.
-        </p>
-      </div>
-
-      <div className="grid lg:grid-cols-3 gap-12">
-        {/* Customer Information Form */}
-        <div className="lg:col-span-2">
-          <div
-            className="p-8 rounded-2xl"
-            style={{
-              background: "rgba(30, 41, 59, 0.4)",
-              border: "2px solid rgba(107, 220, 192, 0.2)",
-              boxShadow: "0 8px 32px rgba(107, 220, 192, 0.1)",
-            }}
-          >
-            <h3 className="text-2xl font-bold text-white mb-8 flex items-center">
-              <svg
-                className="w-6 h-6 text-[#6bdcc0] mr-3"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
-                />
-              </svg>
-              Your Information
-            </h3>
-
-            <div className="grid md:grid-cols-2 gap-6">
-              {/* First Name */}
-              <div>
-                <label className="block text-sm font-semibold text-[#6bdcc0] mb-2">
-                  First Name *
-                </label>
-                <input
-                  type="text"
-                  value={localCustomerData.firstName}
-                  onChange={(e) =>
-                    handleInputChange("firstName", e.target.value)
-                  }
-                  className={`w-full px-4 py-3 rounded-xl bg-[#051028] border-2 text-white placeholder-[#64748b] transition-all duration-300 focus:outline-none focus:ring-4 focus:ring-[#6bdcc0]/30 ${
-                    formErrors.firstName
-                      ? "border-red-500 focus:border-red-500"
-                      : "border-[#64748b] focus:border-[#6bdcc0]"
-                  }`}
-                  placeholder="Enter your first name"
-                />
-                {formErrors.firstName && (
-                  <p className="text-red-400 text-sm mt-2">
-                    {formErrors.firstName}
-                  </p>
-                )}
-              </div>
-
-              {/* Last Name */}
-              <div>
-                <label className="block text-sm font-semibold text-[#6bdcc0] mb-2">
-                  Last Name *
-                </label>
-                <input
-                  type="text"
-                  value={localCustomerData.lastName}
-                  onChange={(e) =>
-                    handleInputChange("lastName", e.target.value)
-                  }
-                  className={`w-full px-4 py-3 rounded-xl bg-[#051028] border-2 text-white placeholder-[#64748b] transition-all duration-300 focus:outline-none focus:ring-4 focus:ring-[#6bdcc0]/30 ${
-                    formErrors.lastName
-                      ? "border-red-500 focus:border-red-500"
-                      : "border-[#64748b] focus:border-[#6bdcc0]"
-                  }`}
-                  placeholder="Enter your last name"
-                />
-                {formErrors.lastName && (
-                  <p className="text-red-400 text-sm mt-2">
-                    {formErrors.lastName}
-                  </p>
-                )}
-              </div>
-
-              {/* Email */}
-              <div>
-                <label className="block text-sm font-semibold text-[#6bdcc0] mb-2">
-                  Email Address *
-                </label>
-                <input
-                  type="email"
-                  value={localCustomerData.email}
-                  onChange={(e) => handleInputChange("email", e.target.value)}
-                  className={`w-full px-4 py-3 rounded-xl bg-[#051028] border-2 text-white placeholder-[#64748b] transition-all duration-300 focus:outline-none focus:ring-4 focus:ring-[#6bdcc0]/30 ${
-                    formErrors.email
-                      ? "border-red-500 focus:border-red-500"
-                      : "border-[#64748b] focus:border-[#6bdcc0]"
-                  }`}
-                  placeholder="your.email@company.com"
-                />
-                {formErrors.email && (
-                  <p className="text-red-400 text-sm mt-2">
-                    {formErrors.email}
-                  </p>
-                )}
-              </div>
-
-              {/* Phone */}
-              <div>
-                <label className="block text-sm font-semibold text-[#6bdcc0] mb-2">
-                  Phone Number *
-                </label>
-                <PhoneInput
-                  defaultCountry="us"
-                  value={localCustomerData.phone}
-                  onChange={(value) => handleInputChange("phone", value)}
-                  className={`w-full px-4 py-3 rounded-xl bg-[#051028] border-2 text-white placeholder-[#64748b] transition-all duration-300 focus:outline-none focus:ring-4 focus:ring-[#6bdcc0]/30 ${
-                    formErrors.phone
-                      ? "border-red-500 focus:border-red-500"
-                      : "border-[#64748b] focus:border-[#6bdcc0]"
-                  }`}
-                  placeholder="+1 (555) 123-4567"
-                />
-                {formErrors.phone && (
-                  <p className="text-red-400 text-sm mt-2">
-                    {formErrors.phone}
-                  </p>
-                )}
-              </div>
-
-              {/* Company */}
-              <div className="md:col-span-2">
-                <label className="block text-sm font-semibold text-[#6bdcc0] mb-2">
-                  Company Name *
-                </label>
-                <input
-                  type="text"
-                  value={localCustomerData.company}
-                  onChange={(e) => handleInputChange("company", e.target.value)}
-                  className={`w-full px-4 py-3 rounded-xl bg-[#051028] border-2 text-white placeholder-[#64748b] transition-all duration-300 focus:outline-none focus:ring-4 focus:ring-[#6bdcc0]/30 ${
-                    formErrors.company
-                      ? "border-red-500 focus:border-red-500"
-                      : "border-[#64748b] focus:border-[#6bdcc0]"
-                  }`}
-                  placeholder="Your Company Name"
-                />
-                {formErrors.company && (
-                  <p className="text-red-400 text-sm mt-2">
-                    {formErrors.company}
-                  </p>
-                )}
-              </div>
-
-              {/* Project Description */}
-              <div className="md:col-span-2">
-                <label className="block text-sm font-semibold text-[#6bdcc0] mb-2">
-                  Project Description *
-                </label>
-                <textarea
-                  value={localCustomerData.projectDescription}
-                  onChange={(e) =>
-                    handleInputChange("projectDescription", e.target.value)
-                  }
-                  rows={4}
-                  className={`w-full px-4 py-3 rounded-xl bg-[#051028] border-2 text-white placeholder-[#64748b] transition-all duration-300 focus:outline-none focus:ring-4 focus:ring-[#6bdcc0]/30 resize-none ${
-                    formErrors.projectDescription
-                      ? "border-red-500 focus:border-red-500"
-                      : "border-[#64748b] focus:border-[#6bdcc0]"
-                  }`}
-                  placeholder="Please describe your project, goals, and what you're looking to achieve..."
-                />
-                {formErrors.projectDescription && (
-                  <p className="text-red-400 text-sm mt-2">
-                    {formErrors.projectDescription}
-                  </p>
-                )}
-              </div>
-
-              {/* Turnstile Integration */}
-              <div className="md:col-span-2 flex justify-center py-4">
-                <Turnstile
-                  ref={turnstileRef}
-                  onSuccess={handleSuccess}
-                  onError={handleError}
-                  onExpire={handleExpire}
-                />
-              </div>
-              {turnstileError && (
-                <div className="md:col-span-2 p-3 bg-red-500/10 border border-red-500/20 rounded-lg">
-                  <p className="text-red-400 text-sm text-center">
-                    {turnstileError}
-                  </p>
-                </div>
-              )}
-
-              {/* Success confirmation */}
-              {isVerified && (
-                <div className="md:col-span-2 p-3 bg-green-500/10 border border-green-500/20 rounded-lg">
-                  <p className="text-green-400 text-sm text-center flex items-center justify-center">
-                    <svg
-                      className="w-4 h-4 mr-2"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M5 13l4 4L19 7"
-                      />
-                    </svg>
-                    Security verification completed
-                  </p>
-                </div>
-              )}
-            </div>
-          </div>
+    <>
+      <BookingSuccessModal
+        isOpen={showSuccessModal}
+        bookingDetails={confirmedBooking}
+      />
+      <div className="space-y-8">
+        <div className="text-center mb-12">
+          <h2 className="text-3xl sm:text-4xl font-bold text-white mb-4">
+            Complete Your Booking
+          </h2>
+          <p className="text-lg text-[#64748b] max-w-2xl mx-auto">
+            Please provide your information to confirm your consultation
+            appointment.
+          </p>
         </div>
 
-        {/* Booking Summary */}
-        <div className="lg:col-span-1">
-          <div
-            className="p-8 rounded-2xl sticky top-8"
-            style={{
-              background:
-                "linear-gradient(135deg, rgba(107, 220, 192, 0.1) 0%, rgba(34, 211, 238, 0.1) 100%)",
-              border: "2px solid rgba(107, 220, 192, 0.3)",
-              boxShadow: "0 8px 32px rgba(107, 220, 192, 0.2)",
-            }}
-          >
-            <h3 className="text-2xl font-bold text-[#6bdcc0] mb-6">
-              Booking Summary
-            </h3>
+        <div className="grid lg:grid-cols-3 gap-12">
+          {/* Customer Information Form */}
+          <div className="lg:col-span-2">
+            <div
+              className="p-8 rounded-2xl"
+              style={{
+                background: "rgba(30, 41, 59, 0.4)",
+                border: "2px solid rgba(107, 220, 192, 0.2)",
+                boxShadow: "0 8px 32px rgba(107, 220, 192, 0.1)",
+              }}
+            >
+              <h3 className="text-2xl font-bold text-white mb-8 flex items-center">
+                <svg
+                  className="w-6 h-6 text-[#6bdcc0] mr-3"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
+                  />
+                </svg>
+                Your Information
+              </h3>
 
-            {/* Service Details */}
-            <div className="mb-6">
-              <h4 className="text-lg font-semibold text-white mb-3">Service</h4>
-              <div className="space-y-2">
-                <p className="text-[#64748b]">{bookingData.service?.name}</p>
-                <div className="flex justify-between">
-                  <span className="text-[#64748b]">Duration:</span>
-                  <span className="text-white">
-                    {bookingData.service?.duration} minutes
-                  </span>
+              <div className="grid md:grid-cols-2 gap-6">
+                {/* First Name */}
+                <div>
+                  <label className="block text-sm font-semibold text-[#6bdcc0] mb-2">
+                    First Name *
+                  </label>
+                  <input
+                    type="text"
+                    value={localCustomerData.firstName}
+                    onChange={(e) =>
+                      handleInputChange("firstName", e.target.value)
+                    }
+                    className={`w-full px-4 py-3 rounded-xl bg-[#051028] border-2 text-white placeholder-[#64748b] transition-all duration-300 focus:outline-none focus:ring-4 focus:ring-[#6bdcc0]/30 ${
+                      formErrors.firstName
+                        ? "border-red-500 focus:border-red-500"
+                        : "border-[#64748b] focus:border-[#6bdcc0]"
+                    }`}
+                    placeholder="Enter your first name"
+                  />
+                  {formErrors.firstName && (
+                    <p className="text-red-400 text-sm mt-2">
+                      {formErrors.firstName}
+                    </p>
+                  )}
                 </div>
-                <div className="flex justify-between">
-                  <span className="text-[#64748b]">Price:</span>
-                  <span className="text-[#6bdcc0] font-bold">
+
+                {/* Last Name */}
+                <div>
+                  <label className="block text-sm font-semibold text-[#6bdcc0] mb-2">
+                    Last Name *
+                  </label>
+                  <input
+                    type="text"
+                    value={localCustomerData.lastName}
+                    onChange={(e) =>
+                      handleInputChange("lastName", e.target.value)
+                    }
+                    className={`w-full px-4 py-3 rounded-xl bg-[#051028] border-2 text-white placeholder-[#64748b] transition-all duration-300 focus:outline-none focus:ring-4 focus:ring-[#6bdcc0]/30 ${
+                      formErrors.lastName
+                        ? "border-red-500 focus:border-red-500"
+                        : "border-[#64748b] focus:border-[#6bdcc0]"
+                    }`}
+                    placeholder="Enter your last name"
+                  />
+                  {formErrors.lastName && (
+                    <p className="text-red-400 text-sm mt-2">
+                      {formErrors.lastName}
+                    </p>
+                  )}
+                </div>
+
+                {/* Email */}
+                <div>
+                  <label className="block text-sm font-semibold text-[#6bdcc0] mb-2">
+                    Email Address *
+                  </label>
+                  <input
+                    type="email"
+                    value={localCustomerData.email}
+                    onChange={(e) => handleInputChange("email", e.target.value)}
+                    className={`w-full px-4 py-3 rounded-xl bg-[#051028] border-2 text-white placeholder-[#64748b] transition-all duration-300 focus:outline-none focus:ring-4 focus:ring-[#6bdcc0]/30 ${
+                      formErrors.email
+                        ? "border-red-500 focus:border-red-500"
+                        : "border-[#64748b] focus:border-[#6bdcc0]"
+                    }`}
+                    placeholder="your.email@company.com"
+                  />
+                  {formErrors.email && (
+                    <p className="text-red-400 text-sm mt-2">
+                      {formErrors.email}
+                    </p>
+                  )}
+                </div>
+
+                {/* Phone */}
+                <div>
+                  <label className="block text-sm font-semibold text-[#6bdcc0] mb-2">
+                    Phone Number *
+                  </label>
+                  <div className="phone-input-container">
+                    <PhoneInput
+                      defaultCountry="us"
+                      value={localCustomerData.phone}
+                      onChange={(value) => handleInputChange("phone", value)}
+                      className={`w-full px-4 py-3 rounded-xl bg-[#051028] border-2 text-white placeholder-[#64748b] transition-all duration-300 focus:outline-none focus:ring-4 focus:ring-[#6bdcc0]/30 ${
+                        formErrors.phone
+                          ? "border-red-500 focus:border-red-500"
+                          : "border-[#64748b] focus:border-[#6bdcc0]"
+                      }`}
+                      placeholder="+1 (555) 123-4567"
+                    />
+                  </div>
+                  {formErrors.phone && (
+                    <p className="text-red-400 text-sm mt-2">
+                      {formErrors.phone}
+                    </p>
+                  )}
+                </div>
+
+                {/* Company */}
+                <div className="md:col-span-2">
+                  <label className="block text-sm font-semibold text-[#6bdcc0] mb-2">
+                    Company Name *
+                  </label>
+                  <input
+                    type="text"
+                    value={localCustomerData.company}
+                    onChange={(e) =>
+                      handleInputChange("company", e.target.value)
+                    }
+                    className={`w-full px-4 py-3 rounded-xl bg-[#051028] border-2 text-white placeholder-[#64748b] transition-all duration-300 focus:outline-none focus:ring-4 focus:ring-[#6bdcc0]/30 ${
+                      formErrors.company
+                        ? "border-red-500 focus:border-red-500"
+                        : "border-[#64748b] focus:border-[#6bdcc0]"
+                    }`}
+                    placeholder="Your Company Name"
+                  />
+                  {formErrors.company && (
+                    <p className="text-red-400 text-sm mt-2">
+                      {formErrors.company}
+                    </p>
+                  )}
+                </div>
+
+                {/* Project Description */}
+                <div className="md:col-span-2">
+                  <label className="block text-sm font-semibold text-[#6bdcc0] mb-2">
+                    Project Description *
+                  </label>
+                  <textarea
+                    value={localCustomerData.projectDescription}
+                    onChange={(e) =>
+                      handleInputChange("projectDescription", e.target.value)
+                    }
+                    rows={4}
+                    className={`w-full px-4 py-3 rounded-xl bg-[#051028] border-2 text-white placeholder-[#64748b] transition-all duration-300 focus:outline-none focus:ring-4 focus:ring-[#6bdcc0]/30 resize-none ${
+                      formErrors.projectDescription
+                        ? "border-red-500 focus:border-red-500"
+                        : "border-[#64748b] focus:border-[#6bdcc0]"
+                    }`}
+                    placeholder="Please describe your project, goals, and what you're looking to achieve..."
+                  />
+                  {formErrors.projectDescription && (
+                    <p className="text-red-400 text-sm mt-2">
+                      {formErrors.projectDescription}
+                    </p>
+                  )}
+                </div>
+
+                {/* Turnstile Integration */}
+                <div className="md:col-span-2 flex justify-center py-4">
+                  <Turnstile
+                    ref={turnstileRef}
+                    onSuccess={handleSuccess}
+                    onError={handleError}
+                    onExpire={handleExpire}
+                  />
+                </div>
+                {turnstileError && (
+                  <div className="md:col-span-2 p-3 bg-red-500/10 border border-red-500/20 rounded-lg">
+                    <p className="text-red-400 text-sm text-center">
+                      {turnstileError}
+                    </p>
+                  </div>
+                )}
+
+                {/* Success confirmation */}
+                {isVerified && (
+                  <div className="md:col-span-2 p-3 bg-green-500/10 border border-green-500/20 rounded-lg">
+                    <p className="text-green-400 text-sm text-center flex items-center justify-center">
+                      <svg
+                        className="w-4 h-4 mr-2"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M5 13l4 4L19 7"
+                        />
+                      </svg>
+                      Security verification completed
+                    </p>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Booking Summary */}
+          <div className="lg:col-span-1">
+            <div
+              className="p-8 rounded-2xl sticky top-8"
+              style={{
+                background:
+                  "linear-gradient(135deg, rgba(107, 220, 192, 0.1) 0%, rgba(34, 211, 238, 0.1) 100%)",
+                border: "2px solid rgba(107, 220, 192, 0.3)",
+                boxShadow: "0 8px 32px rgba(107, 220, 192, 0.2)",
+              }}
+            >
+              <h3 className="text-2xl font-bold text-[#6bdcc0] mb-6">
+                Booking Summary
+              </h3>
+
+              {/* Service Details */}
+              <div className="mb-6">
+                <h4 className="text-lg font-semibold text-white mb-3">
+                  Service
+                </h4>
+                <div className="space-y-2">
+                  <p className="text-[#64748b]">{bookingData.service?.name}</p>
+                  <div className="flex justify-between">
+                    <span className="text-[#64748b]">Duration:</span>
+                    <span className="text-white">
+                      {bookingData.service?.duration} minutes
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-[#64748b]">Price:</span>
+                    <span className="text-[#6bdcc0] font-bold">
+                      {bookingData.service?.price === 0
+                        ? "Free"
+                        : `$${bookingData.service?.price}`}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Date & Time */}
+              <div className="mb-6">
+                <h4 className="text-lg font-semibold text-white mb-3">
+                  Date & Time
+                </h4>
+                <div className="space-y-2">
+                  <p className="text-[#64748b]">
+                    {bookingData.dateTime?.date &&
+                      new Date(
+                        bookingData.dateTime.date + "T00:00:00"
+                      ).toLocaleDateString("en-US", {
+                        weekday: "long",
+                        month: "long",
+                        day: "numeric",
+                        year: "numeric",
+                      })}
+                  </p>
+                  <p className="text-white font-semibold">
+                    {bookingData.dateTime?.time &&
+                      new Date(
+                        `2000-01-01T${bookingData.dateTime.time}`
+                      ).toLocaleTimeString("en-US", {
+                        hour: "numeric",
+                        minute: "2-digit",
+                        hour12: true,
+                      })}
+                  </p>
+                </div>
+              </div>
+
+              {/* Total */}
+              <div className="border-t border-[#64748b]/30 pt-6">
+                <div className="flex justify-between items-center">
+                  <span className="text-xl font-bold text-white">Total:</span>
+                  <span className="text-2xl font-bold text-[#6bdcc0]">
                     {bookingData.service?.price === 0
                       ? "Free"
                       : `$${bookingData.service?.price}`}
                   </span>
                 </div>
+                {bookingData.service?.price === 0 && (
+                  <p className="text-sm text-[#64748b] mt-2">
+                    No payment required for this consultation
+                  </p>
+                )}
               </div>
-            </div>
-
-            {/* Date & Time */}
-            <div className="mb-6">
-              <h4 className="text-lg font-semibold text-white mb-3">
-                Date & Time
-              </h4>
-              <div className="space-y-2">
-                <p className="text-[#64748b]">
-                  {bookingData.dateTime?.date &&
-                    new Date(
-                      bookingData.dateTime.date + "T00:00:00"
-                    ).toLocaleDateString("en-US", {
-                      weekday: "long",
-                      month: "long",
-                      day: "numeric",
-                      year: "numeric",
-                    })}
-                </p>
-                <p className="text-white font-semibold">
-                  {bookingData.dateTime?.time &&
-                    new Date(
-                      `2000-01-01T${bookingData.dateTime.time}`
-                    ).toLocaleTimeString("en-US", {
-                      hour: "numeric",
-                      minute: "2-digit",
-                      hour12: true,
-                    })}
-                </p>
-              </div>
-            </div>
-
-            {/* Total */}
-            <div className="border-t border-[#64748b]/30 pt-6">
-              <div className="flex justify-between items-center">
-                <span className="text-xl font-bold text-white">Total:</span>
-                <span className="text-2xl font-bold text-[#6bdcc0]">
-                  {bookingData.service?.price === 0
-                    ? "Free"
-                    : `$${bookingData.service?.price}`}
-                </span>
-              </div>
-              {bookingData.service?.price === 0 && (
-                <p className="text-sm text-[#64748b] mt-2">
-                  No payment required for this consultation
-                </p>
-              )}
             </div>
           </div>
         </div>
-      </div>
 
-      {/* Navigation Buttons */}
-      <div className="flex justify-between items-center pt-6">
-        <Button onClick={onPrevious} variant="outline">
-          Previous
-        </Button>
-        <Button
-          onClick={handleSubmit}
-          disabled={isNextDisabled}
-          isLoading={createBookingMutation.isPending}
-        >
-          {createBookingMutation.isPending
-            ? "Confirming..."
-            : bookingData.service?.requiresPayment
-            ? "Next: Payment"
-            : "Confirm Booking"}
-        </Button>
+        {/* Navigation Buttons */}
+        <div className="flex justify-between items-center pt-6">
+          <Button onClick={onPrevious} variant="outline">
+            Previous
+          </Button>
+          <Button
+            onClick={handleSubmit}
+            disabled={isNextDisabled}
+            isLoading={createBookingMutation.isPending}
+          >
+            {createBookingMutation.isPending
+              ? "Confirming..."
+              : bookingData.service?.requiresPayment
+              ? "Next: Payment"
+              : "Confirm Booking"}
+          </Button>
+        </div>
       </div>
-    </div>
+    </>
   );
 }

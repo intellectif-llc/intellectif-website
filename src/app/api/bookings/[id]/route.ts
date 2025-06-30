@@ -76,9 +76,12 @@ export async function GET(
 
     // Check permissions
     const staffStatus = await isStaff(user.id);
-    const isOwner = booking.consultant_id === user.id;
+    const isConsultantOwner = booking.consultant_id === user.id;
+    const isCustomerOwner = booking.user_id === user.id;
 
-    if (!staffStatus && !isOwner) {
+    if (!staffStatus && !isConsultantOwner && !isCustomerOwner) {
+      // For anonymous bookings, we might need a different way to verify ownership,
+      // perhaps a token sent via email. For now, we only allow logged-in users.
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
