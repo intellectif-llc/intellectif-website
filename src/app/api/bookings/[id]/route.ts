@@ -3,6 +3,7 @@ import {
   createRouteHandlerClient,
   createServiceRoleClient,
 } from "@/lib/supabase-server";
+import { sendConsultantWhatsAppTemplate } from "@/lib/twilio-whatsapp";
 
 // Helper function to check if user is staff - ALWAYS use service role to bypass RLS
 async function isStaff(userId: string): Promise<boolean> {
@@ -220,7 +221,7 @@ export async function PATCH(
     // Add audit fields
     updateData.updated_at = new Date().toISOString();
 
-    // Perform the update
+    // Update the booking
     const { data: updatedBooking, error: updateError } = await serviceSupabase
       .from("bookings")
       .update(updateData)
@@ -228,17 +229,91 @@ export async function PATCH(
       .select(
         `
         *,
-        service:services(*)
+        service:services(name, duration_minutes),
+        consultant:profiles!bookings_consultant_id_fkey(id, first_name, last_name)
       `
       )
       .single();
 
     if (updateError) {
-      console.error("Error updating booking:", updateError);
+      console.error("Update error:", updateError);
       return NextResponse.json(
         { error: "Failed to update booking" },
         { status: 500 }
       );
+    }
+
+    // Send WhatsApp notification if consultant was assigned
+    if (action === "assign" && consultant_id && updatedBooking) {
+      try {
+        // Get consultant's phone number
+        const { data: consultantPhone, error: phoneError } =
+          await serviceSupabase.rpc("get_user_phone", {
+            user_id: consultant_id,
+          });
+
+        if (phoneError) {
+          console.error("❌ Failed to get consultant phone:", phoneError);
+        } else if (consultantPhone) {
+          console.log(
+            "📱 Sending WhatsApp notification for manual assignment:",
+            {
+              consultantId: consultant_id,
+              bookingId: bookingId,
+              bookingReference: updatedBooking.booking_reference,
+            }
+          );
+
+          // Format the scheduled time
+          const scheduledTimeFormatted = new Date(
+            `${updatedBooking.scheduled_date}T${updatedBooking.scheduled_time}:00`
+          ).toLocaleTimeString("en-US", {
+            hour: "numeric",
+            minute: "2-digit",
+            hour12: true,
+            timeZoneName: "short",
+          });
+
+          const templateSid = process.env.TWILIO_WHATSAPP_TEMPLATE_SID;
+
+          if (templateSid) {
+            await sendConsultantWhatsAppTemplate(
+              {
+                consultantName: updatedBooking.consultant?.first_name
+                  ? `${updatedBooking.consultant.first_name} ${updatedBooking.consultant.last_name}`
+                  : "Consultant",
+                consultantPhone: consultantPhone,
+                customerName:
+                  `${updatedBooking.customer_data?.first_name || ""} ${
+                    updatedBooking.customer_data?.last_name || ""
+                  }`.trim() || "Customer",
+                serviceName: updatedBooking.service?.name || "Consultation",
+                bookingReference: updatedBooking.booking_reference,
+                scheduledDate: updatedBooking.scheduled_date,
+                scheduledTime: scheduledTimeFormatted,
+                duration: updatedBooking.service?.duration_minutes || 60,
+                meetingUrl: updatedBooking.meeting_url || "",
+              },
+              templateSid
+            );
+            console.log("✅ WhatsApp notification sent for manual assignment");
+          } else {
+            console.warn(
+              "⚠️ WhatsApp template SID not configured, skipping WhatsApp notification"
+            );
+          }
+        } else {
+          console.log(
+            "ℹ️ Consultant has no phone number, skipping WhatsApp notification"
+          );
+        }
+      } catch (whatsappError) {
+        console.error(
+          "❌ Failed to send WhatsApp notification for assignment:",
+          whatsappError
+        );
+        // Don't fail the assignment if WhatsApp fails
+      }
     }
 
     // Fetch updated consultant profile if assigned

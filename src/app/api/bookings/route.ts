@@ -4,6 +4,7 @@ import {
 } from "@/lib/supabase-server";
 import { NextRequest, NextResponse } from "next/server";
 import { sendBookingConfirmationEmail } from "@/lib/email-service";
+import { sendConsultantWhatsAppTemplate } from "@/lib/twilio-whatsapp";
 import {
   GoogleMeetService,
   type CreateMeetingOptions,
@@ -355,6 +356,74 @@ export async function POST(request: NextRequest) {
         emailError
       );
       // Don't fail the booking if email fails - booking was successful
+    }
+
+    // Send WhatsApp notification to assigned consultant
+    if (consultant && consultant.consultant_id) {
+      try {
+        // Get consultant's phone number using the secure database function
+        const { data: consultantPhone, error: phoneError } = await supabase.rpc(
+          "get_user_phone",
+          { user_id: consultant.consultant_id }
+        );
+
+        if (phoneError) {
+          console.error("❌ Failed to get consultant phone:", phoneError);
+        } else if (consultantPhone) {
+          console.log("📱 Sending WhatsApp notification to consultant:", {
+            consultantId: consultant.consultant_id,
+            consultantName: consultant.consultant_name,
+            bookingReference: booking.booking_reference,
+          });
+
+          // Format the scheduled time for WhatsApp (same as email)
+          const scheduledTimeFormatted = new Date(
+            `${scheduledDate}T${scheduledTime}:00`
+          ).toLocaleTimeString("en-US", {
+            hour: "numeric",
+            minute: "2-digit",
+            hour12: true,
+            timeZoneName: "short",
+          });
+
+          // Get the template SID from environment variables
+          const templateSid = process.env.TWILIO_WHATSAPP_TEMPLATE_SID;
+
+          if (templateSid) {
+            await sendConsultantWhatsAppTemplate(
+              {
+                consultantName: consultant.consultant_name,
+                consultantPhone: consultantPhone,
+                customerName: `${customerData.firstName} ${customerData.lastName}`,
+                serviceName: service.name,
+                bookingReference: booking.booking_reference,
+                scheduledDate: scheduledDate,
+                scheduledTime: scheduledTimeFormatted,
+                duration: service.duration_minutes,
+                meetingUrl: booking.meeting_url || "",
+              },
+              templateSid
+            );
+            console.log(
+              "✅ WhatsApp notification sent to consultant successfully"
+            );
+          } else {
+            console.warn(
+              "⚠️ WhatsApp template SID not configured, skipping WhatsApp notification"
+            );
+          }
+        } else {
+          console.log(
+            "ℹ️ Consultant has no phone number, skipping WhatsApp notification"
+          );
+        }
+      } catch (whatsappError) {
+        console.error(
+          "❌ Failed to send WhatsApp notification to consultant:",
+          whatsappError
+        );
+        // Don't fail the booking if WhatsApp fails - booking was successful
+      }
     }
 
     // Create follow-up task if required

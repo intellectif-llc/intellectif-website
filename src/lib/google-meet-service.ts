@@ -34,8 +34,7 @@ export interface CreateMeetingOptions {
 
 export class GoogleMeetService {
   /**
-   * Create a Google Meet meeting using Google Meet REST API v2
-   * This creates a unique meeting space for each consultation
+   * Creates a Google Meet meeting space with enhanced error handling
    */
   static async createMeeting(
     _options: CreateMeetingOptions
@@ -43,16 +42,16 @@ export class GoogleMeetService {
     try {
       console.log("🚀 Creating Google Meet via REST API v2...");
 
-      // Get access token
+      // Get access token (will handle refresh token if needed)
       const accessToken = await this.getAccessToken();
       if (!accessToken) {
-        console.error("❌ Failed to get access token");
+        console.error("❌ Failed to get access token for Google Meet");
         return null;
       }
 
       console.log("✅ Access token obtained, calling Google Meet API...");
 
-      // Call Google Meet REST API v2 - exactly like your successful test
+      // Call Google Meet REST API v2 - using the working fetch approach
       const response = await fetch("https://meet.googleapis.com/v2/spaces", {
         method: "POST",
         headers: {
@@ -111,169 +110,98 @@ export class GoogleMeetService {
           // }
         },
       };
-    } catch (error) {
+    } catch (error: any) {
       console.error("❌ Error creating Google Meet:", error);
+
+      // Enhanced error handling for production
+      if (
+        error.status === 401 ||
+        error.message?.includes("invalid_grant") ||
+        error.message?.includes("Invalid authentication credentials")
+      ) {
+        console.error("🔑 REFRESH TOKEN EXPIRED OR REVOKED - Action Required:");
+        console.error("1. Go to https://developers.google.com/oauthplayground");
+        console.error("2. Use your own OAuth credentials");
+        console.error("3. Request scopes: calendar, meet.meetings");
+        console.error("4. Generate new refresh token");
+        console.error("5. Update GOOGLE_REFRESH_TOKEN environment variable");
+        console.error("6. Restart the application");
+      } else if (error.status === 403) {
+        console.error(
+          "🚫 Google Meet API access denied - check API enablement and scopes"
+        );
+      } else if (error.status === 429) {
+        console.error("⏰ Rate limit exceeded - implement exponential backoff");
+      }
+
       return null;
     }
   }
 
   /**
-   * Get access token using OAuth 2.0 refresh token
+   * Get access token with improved error handling for production
    */
   private static async getAccessToken(): Promise<string | null> {
     try {
       const clientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
       const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
-      const directAccessToken = process.env.GOOGLE_ACCESS_TOKEN;
       const refreshToken = process.env.GOOGLE_REFRESH_TOKEN;
 
-      console.log("🔍 Checking OAuth credentials...");
-      console.log(
-        "📋 Client ID:",
-        clientId ? `${clientId.substring(0, 20)}...` : "MISSING"
-      );
-      console.log(
-        "📋 Client Secret:",
-        clientSecret ? `${clientSecret.substring(0, 10)}...` : "MISSING"
-      );
-      console.log(
-        "📋 Direct Access Token:",
-        directAccessToken
-          ? `${directAccessToken.substring(0, 20)}...`
-          : "MISSING"
-      );
-      console.log(
-        "📋 Refresh Token:",
-        refreshToken ? `${refreshToken.substring(0, 20)}...` : "MISSING"
-      );
-
-      if (!clientId || !clientSecret) {
-        console.error("❌ Missing Google OAuth client credentials");
+      if (!clientId || !clientSecret || !refreshToken) {
+        console.error("❌ Missing Google OAuth credentials");
         return null;
       }
 
-      // OPTION 1: Use direct access token if available
-      if (directAccessToken) {
-        console.log("✅ Using direct access token from GOOGLE_ACCESS_TOKEN");
+      console.log("📋 Google OAuth Configuration:", {
+        clientId: clientId.substring(0, 20) + "...",
+        clientSecret: clientSecret
+          ? "GOCSPX-" + clientSecret.substring(6, 15) + "..."
+          : "Missing",
+        refreshToken: refreshToken.substring(0, 20) + "...",
+      });
 
-        // Verify the token is valid and has correct scopes
-        const tokenVerifyResponse = await fetch(
-          "https://www.googleapis.com/oauth2/v1/tokeninfo",
-          {
-            method: "GET",
-            headers: {
-              Authorization: `Bearer ${directAccessToken}`,
-            },
-          }
-        );
-
-        if (tokenVerifyResponse.ok) {
-          const tokenInfo = await tokenVerifyResponse.json();
-          console.log("✅ Access token is valid! Token info:", {
-            audience: tokenInfo.audience,
-            scope: tokenInfo.scope,
-            expires_in: tokenInfo.expires_in,
-          });
-
-          // Check for Google Meet scope
-          if (
-            tokenInfo.scope &&
-            (tokenInfo.scope.includes(
-              "https://www.googleapis.com/auth/meetings.space.created"
-            ) ||
-              tokenInfo.scope.includes(
-                "https://www.googleapis.com/auth/calendar"
-              ))
-          ) {
-            console.log("✅ Access token has correct scope for Google Meet");
-            return directAccessToken;
-          } else {
-            console.warn(
-              "⚠️ Access token doesn't have Google Meet scope. Available scopes:",
-              tokenInfo.scope
-            );
-            console.log("🔄 Will try refresh token flow instead...");
-          }
-        } else {
-          console.warn(
-            "⚠️ Direct access token verification failed, trying refresh token..."
-          );
-        }
-      }
-
-      // OPTION 2: Use refresh token flow
-      if (!refreshToken) {
-        console.error("❌ No refresh token available for OAuth flow");
-        return null;
-      }
-
-      console.log("🔑 Using refresh token to get new access token...");
-
+      // Initialize OAuth2 client
       const oauth2Client = new google.auth.OAuth2(
         clientId,
         clientSecret,
-        "https://developers.google.com/oauthplayground" // Standard OAuth playground redirect URI
+        "https://developers.google.com/oauthplayground"
       );
 
-      console.log("📋 OAuth2 Client configured with:");
-      console.log(
-        "   - Client ID:",
-        clientId ? `${clientId.substring(0, 20)}...` : "MISSING"
-      );
-      console.log(
-        "   - Redirect URI: https://developers.google.com/oauthplayground"
-      );
-
+      // Set refresh token
       oauth2Client.setCredentials({
         refresh_token: refreshToken,
       });
 
-      console.log("🔄 Attempting to refresh access token...");
+      console.log("🔄 Refreshing Google access token...");
 
-      // Get access token
+      // Get new access token
       const { token } = await oauth2Client.getAccessToken();
 
       if (!token) {
-        console.error("❌ Failed to get access token from refresh token");
+        console.error("❌ Failed to refresh access token");
         return null;
       }
 
-      console.log("✅ Access token obtained successfully via refresh token");
-      console.log("📋 New access token:", `${token.substring(0, 20)}...`);
-
+      console.log("✅ Access token refreshed successfully");
       return token;
-    } catch (error) {
-      console.error("❌ Error getting access token:", error);
+    } catch (error: any) {
+      console.error("❌ Error refreshing access token:", error);
 
-      // Enhanced error logging
-      if (error instanceof Error) {
-        console.error("❌ Error details:", {
-          message: error.message,
-          name: error.name,
-          stack: error.stack?.split("\n").slice(0, 3).join("\n"), // First 3 lines of stack
+      // Production-specific error handling
+      if (error.message?.includes("invalid_grant")) {
+        console.error(
+          "🔑 CRITICAL: Refresh token has expired or been revoked!"
+        );
+        console.error("📋 Error details:", {
+          error: error.response?.data?.error,
+          error_description: error.response?.data?.error_description,
+          timestamp: new Date().toISOString(),
         });
-      }
-
-      // If it's an invalid_grant error, provide specific guidance
-      if (error instanceof Error && error.message.includes("invalid_grant")) {
-        console.error("🚨 INVALID_GRANT ERROR DIAGNOSIS:");
-        console.error("   1. The refresh token might be invalid or expired");
         console.error(
-          "   2. The client credentials might not match what was used in OAuth playground"
+          "🛠️ REQUIRED ACTION: Generate new refresh token using OAuth 2.0 Playground"
         );
-        console.error(
-          "   3. Make sure you're using the REFRESH token, not the ACCESS token"
-        );
-        console.error("💡 SOLUTION: Please verify that:");
-        console.error(
-          "   - GOOGLE_REFRESH_TOKEN contains the refresh_token from OAuth playground"
-        );
-        console.error(
-          "   - OR use GOOGLE_ACCESS_TOKEN for direct access token (temporary solution)"
-        );
-        console.error(
-          "   - Your OAuth client credentials match exactly what you used in OAuth playground"
-        );
+      } else if (error.code === "ENOTFOUND" || error.code === "ETIMEDOUT") {
+        console.error("🌐 Network error - check internet connection");
       }
 
       return null;

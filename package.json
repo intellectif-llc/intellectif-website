@@ -6,8 +6,7 @@
     "dev": "next dev --turbopack",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint",
-    "test:google-meet": "node --env-file=.env.local test_google_meet_integration.mjs"
+    "lint": "next lint"
   },
   "dependencies": {
     "@aws-sdk/client-ses": "^3.830.0",
@@ -28,7 +27,8 @@
     "react-email": "^4.0.16",
     "react-hot-toast": "^2.5.2",
     "react-international-phone": "^4.5.0",
-    "stripe": "^18.2.1"
+    "stripe": "^18.2.1",
+    "twilio": "^5.7.2"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^2",
