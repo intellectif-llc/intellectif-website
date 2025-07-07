@@ -1,6 +1,7 @@
 import { render } from "@react-email/render";
 import { sendEmail } from "./aws-ses";
 import BookingConfirmation from "../emails/BookingConfirmation";
+import { TimezoneService } from "./timezone-service";
 
 export interface BookingEmailData {
   customerName: string;
@@ -13,24 +14,59 @@ export interface BookingEmailData {
   price?: number;
   meetingUrl?: string;
   serviceFeatures?: string[]; // Dynamic features from database
+  customerTimezone?: string; // Customer's timezone for proper formatting
+  scheduledDateTime?: string; // Full datetime for timezone-aware formatting
 }
 
-// Helper function to format date for email display
-function formatEmailDate(dateString: string): string {
+// Helper function to format datetime with timezone awareness
+function formatEmailDateTime(data: BookingEmailData): {
+  date: string;
+  time: string;
+  fullDateTime: string;
+} {
   try {
-    // Parse date as local date to avoid timezone shifting
-    // If dateString is "2025-06-23", treat it as local date, not UTC
-    const [year, month, day] = dateString.split("-").map(Number);
-    const date = new Date(year, month - 1, day); // month is 0-indexed
+    // If we have a full scheduled datetime, use that with timezone formatting
+    if (data.scheduledDateTime) {
+      const formatted = TimezoneService.formatForEmail(
+        data.scheduledDateTime,
+        undefined,
+        data.customerTimezone
+      );
+      const dateTimeComponents = TimezoneService.formatDateTime(
+        data.scheduledDateTime,
+        undefined,
+        data.customerTimezone
+      );
+      return {
+        date: dateTimeComponents.date,
+        time: dateTimeComponents.time,
+        fullDateTime: formatted,
+      };
+    }
 
-    return date.toLocaleDateString("en-US", {
-      weekday: "long",
-      year: "numeric",
-      month: "long",
-      day: "numeric",
-    });
-  } catch {
-    return dateString; // Fallback to original string if parsing fails
+    // Fallback to separate date/time fields
+    const formatted = TimezoneService.formatDateTime(
+      data.scheduledDate,
+      data.scheduledTime,
+      data.customerTimezone
+    );
+    return {
+      date: formatted.date,
+      time: formatted.time,
+      fullDateTime: TimezoneService.formatForEmail(
+        data.scheduledDate,
+        data.scheduledTime,
+        data.customerTimezone
+      ),
+    };
+  } catch (error) {
+    console.warn("Failed to format email datetime, using fallback:", error);
+    // Fallback formatting
+    return {
+      date: data.scheduledDate,
+      time: data.scheduledTime,
+      fullDateTime: `${data.scheduledDate} at ${data.scheduledTime}`,
+    };
   }
 }
 
@@ -48,6 +84,7 @@ function getEmailConfig() {
 export async function sendBookingConfirmationEmail(data: BookingEmailData) {
   try {
     const config = getEmailConfig();
+    const dateTimeFormatted = formatEmailDateTime(data);
 
     // Render the React Email template to HTML with dynamic values
     const emailHtml = await render(
@@ -55,8 +92,8 @@ export async function sendBookingConfirmationEmail(data: BookingEmailData) {
         customerName: data.customerName,
         serviceName: data.serviceName,
         bookingReference: data.bookingReference,
-        scheduledDate: formatEmailDate(data.scheduledDate),
-        scheduledTime: data.scheduledTime,
+        scheduledDate: dateTimeFormatted.date,
+        scheduledTime: dateTimeFormatted.time,
         duration: data.duration,
         price: data.price,
         meetingUrl: data.meetingUrl,
@@ -77,8 +114,7 @@ Your consultation with ${config.companyName} has been confirmed!
 Booking Details:
 - Reference: ${data.bookingReference}
 - Service: ${data.serviceName}
-- Date: ${formatEmailDate(data.scheduledDate)}
-- Time: ${data.scheduledTime}
+- Date & Time: ${dateTimeFormatted.fullDateTime}
 - Duration: ${data.duration} minutes
 ${data.price ? `- Amount Paid: $${data.price.toFixed(2)} USD` : ""}
 
@@ -120,6 +156,7 @@ If you need to reschedule or have questions, reply to this email or contact us a
 export async function sendPaymentConfirmationEmail(data: BookingEmailData) {
   try {
     const config = getEmailConfig();
+    const dateTimeFormatted = formatEmailDateTime(data);
 
     // For payment confirmations, we can reuse the same template
     // but with a different subject line
@@ -128,8 +165,8 @@ export async function sendPaymentConfirmationEmail(data: BookingEmailData) {
         customerName: data.customerName,
         serviceName: data.serviceName,
         bookingReference: data.bookingReference,
-        scheduledDate: formatEmailDate(data.scheduledDate),
-        scheduledTime: data.scheduledTime,
+        scheduledDate: dateTimeFormatted.date,
+        scheduledTime: dateTimeFormatted.time,
         duration: data.duration,
         price: data.price,
         meetingUrl: data.meetingUrl,
@@ -151,8 +188,7 @@ Your payment of $${data.price?.toFixed(2)} USD has been processed successfully.
 Booking Details:
 - Reference: ${data.bookingReference}
 - Service: ${data.serviceName}
-- Date: ${formatEmailDate(data.scheduledDate)}
-- Time: ${data.scheduledTime}
+- Date & Time: ${dateTimeFormatted.fullDateTime}
 - Duration: ${data.duration} minutes
 
 Meeting Link: ${data.meetingUrl}

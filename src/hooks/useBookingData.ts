@@ -53,9 +53,12 @@ export interface BookingData {
     lastName: string;
     phone?: string;
     company?: string;
+    timezone?: string;
   };
   projectDescription: string;
   assignmentStrategy?: string;
+  customerTimezone?: string;
+  scheduledTimezone?: string;
 }
 
 // Add proper booking response types

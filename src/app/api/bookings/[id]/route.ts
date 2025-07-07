@@ -4,6 +4,7 @@ import {
   createServiceRoleClient,
 } from "@/lib/supabase-server";
 import { sendConsultantWhatsAppTemplate } from "@/lib/twilio-whatsapp";
+import { TimezoneService } from "@/lib/timezone-service";
 
 // Helper function to check if user is staff - ALWAYS use service role to bypass RLS
 async function isStaff(userId: string): Promise<boolean> {
@@ -264,15 +265,17 @@ export async function PATCH(
             }
           );
 
-          // Format the scheduled time
-          const scheduledTimeFormatted = new Date(
-            `${updatedBooking.scheduled_date}T${updatedBooking.scheduled_time}:00`
-          ).toLocaleTimeString("en-US", {
-            hour: "numeric",
-            minute: "2-digit",
-            hour12: true,
-            timeZoneName: "short",
-          });
+          // Format the scheduled time with timezone awareness
+          const customerTimezone =
+            updatedBooking.customer_timezone ||
+            TimezoneService.detectUserTimezone();
+
+          const formattedDateTime = TimezoneService.formatDateTime(
+            updatedBooking.scheduled_datetime ||
+              `${updatedBooking.scheduled_date}T${updatedBooking.scheduled_time}:00Z`,
+            undefined,
+            customerTimezone
+          );
 
           const templateSid = process.env.TWILIO_WHATSAPP_TEMPLATE_SID;
 
@@ -289,8 +292,8 @@ export async function PATCH(
                   }`.trim() || "Customer",
                 serviceName: updatedBooking.service?.name || "Consultation",
                 bookingReference: updatedBooking.booking_reference,
-                scheduledDate: updatedBooking.scheduled_date,
-                scheduledTime: scheduledTimeFormatted,
+                scheduledDate: formattedDateTime.date,
+                scheduledTime: formattedDateTime.time,
                 duration: updatedBooking.service?.duration_minutes || 60,
                 meetingUrl: updatedBooking.meeting_url || "",
               },

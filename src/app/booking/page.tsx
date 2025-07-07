@@ -30,6 +30,7 @@ export interface BookingData {
     phone: string;
     company: string;
     projectDescription: string;
+    timezone: string;
   } | null;
 }
 
@@ -94,7 +95,7 @@ export default function BookingPage() {
         return (
           <CustomerInformation
             customerData={bookingData.customer}
-            onCustomerDataUpdate={(customer: BookingData["customer"]) =>
+            onCustomerDataUpdate={(customer) =>
               updateBookingData("customer", customer)
             }
             onPrevious={handlePreviousStep}

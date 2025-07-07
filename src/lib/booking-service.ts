@@ -12,12 +12,14 @@ export interface BookingData {
     lastName: string;
     phone?: string;
     company?: string;
+    timezone?: string;
   };
   project_description: string;
   service_id: string;
   scheduled_date: string;
   scheduled_time: string;
   scheduled_datetime: string;
+  customer_timezone?: string;
   actual_start_time?: string;
   actual_end_time?: string;
   status:
@@ -129,18 +131,15 @@ async function fetchConsultantProfiles(
     .select("id, first_name, last_name")
     .in("id", consultantIds);
 
-  return (profiles || []).reduce(
-    (acc, profile) => {
-      acc[profile.id] = {
-        id: profile.id,
-        first_name: profile.first_name,
-        last_name: profile.last_name,
-        // Skip email lookup to avoid permissions issues with auth.users table
-      };
-      return acc;
-    },
-    {} as Record<string, BookingData["consultant"]>
-  );
+  return (profiles || []).reduce((acc, profile) => {
+    acc[profile.id] = {
+      id: profile.id,
+      first_name: profile.first_name,
+      last_name: profile.last_name,
+      // Skip email lookup to avoid permissions issues with auth.users table
+    };
+    return acc;
+  }, {} as Record<string, BookingData["consultant"]>);
 }
 
 // Core booking service class

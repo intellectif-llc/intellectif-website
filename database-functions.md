@@ -253,7 +253,7 @@ CREATE OR REPLACE FUNCTION public.create_booking_with_availability_check(
     project_description_param text,
     assignment_strategy_param text DEFAULT 'optimal'::text,
     lead_score_param smallint DEFAULT 0,
-    google_meet_payload_param jsonb DEFAULT NULL -- Parameter to accept the full Google Meet API response
+    google_meet_payload_param jsonb DEFAULT NULL::jsonb
 )
  RETURNS jsonb
  LANGUAGE plpgsql
@@ -333,6 +333,7 @@ BEGIN
         customer_metrics_id,
         customer_data,
         project_description,
+        customer_timezone, -- Extract from customer_data_param
         consultant_id,
         status,
         payment_status,
@@ -357,6 +358,7 @@ BEGIN
         customer_metrics_id_param,
         customer_data_param,
         project_description_param,
+        COALESCE(customer_data_param->>'customer_timezone', customer_data_param->>'timezone', 'UTC'), -- Extract with fallback
         consultant_assignment.consultant_id,
         (CASE WHEN service_rec.auto_confirm THEN 'confirmed' ELSE 'pending' END)::booking_status,
         (CASE WHEN service_rec.requires_payment THEN 'pending' ELSE 'waived' END)::payment_status,

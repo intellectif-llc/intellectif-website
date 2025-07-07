@@ -12,6 +12,8 @@ import {
 } from "@/hooks/useBookingData";
 import { useRouter } from "next/navigation";
 import BookingSuccessModal from "./BookingSuccessModal";
+import { TimezoneService } from "@/lib/timezone-service";
+import { TIMEZONE_OPTIONS, getTimezoneLabel } from "@/constants/timezones";
 
 interface CustomerData {
   firstName: string;
@@ -20,6 +22,7 @@ interface CustomerData {
   phone: string;
   company: string;
   projectDescription: string;
+  timezone: string;
 }
 
 interface CustomerInformationProps {
@@ -54,6 +57,7 @@ export default function CustomerInformation({
       phone: "",
       company: "",
       projectDescription: "",
+      timezone: TimezoneService.detectUserTimezone(),
     }
   );
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
@@ -84,6 +88,17 @@ export default function CustomerInformation({
     resetTurnstile();
     turnstileRef.current?.reset();
   }, [bookingData.service?.id, resetTurnstile]);
+
+  // Detect and set user's timezone on component mount
+  useEffect(() => {
+    const detectedTimezone = TimezoneService.detectUserTimezone();
+    if (!customerData?.timezone && detectedTimezone) {
+      setLocalCustomerData((prev) => ({
+        ...prev,
+        timezone: detectedTimezone,
+      }));
+    }
+  }, [customerData?.timezone]);
 
   const handleInputChange = (field: keyof CustomerData, value: string) => {
     setLocalCustomerData((prev) => ({ ...prev, [field]: value }));
@@ -162,8 +177,11 @@ export default function CustomerInformation({
           lastName: localCustomerData.lastName,
           phone: localCustomerData.phone,
           company: localCustomerData.company,
+          timezone: localCustomerData.timezone,
         },
         projectDescription: localCustomerData.projectDescription,
+        customerTimezone: localCustomerData.timezone,
+        scheduledTimezone: localCustomerData.timezone,
       },
       {
         onSuccess: (data) => {
@@ -364,6 +382,32 @@ export default function CustomerInformation({
                       {formErrors.company}
                     </p>
                   )}
+                </div>
+
+                {/* Timezone */}
+                <div className="md:col-span-2">
+                  <label className="block text-sm font-semibold text-[#6bdcc0] mb-2">
+                    Your Timezone
+                  </label>
+                  <select
+                    value={localCustomerData.timezone}
+                    onChange={(e) =>
+                      handleInputChange("timezone", e.target.value)
+                    }
+                    className="w-full px-4 py-3 rounded-xl bg-[#051028] border-2 border-[#64748b] text-white transition-all duration-300 focus:outline-none focus:ring-4 focus:ring-[#6bdcc0]/30 focus:border-[#6bdcc0]"
+                  >
+                    <option value="">Select your timezone...</option>
+                    {TIMEZONE_OPTIONS.map((timezone) => (
+                      <option key={timezone.value} value={timezone.value}>
+                        {timezone.label} ({timezone.offset})
+                      </option>
+                    ))}
+                  </select>
+                  <p className="text-sm text-[#64748b] mt-2">
+                    Auto-detected:{" "}
+                    {getTimezoneLabel(TimezoneService.detectUserTimezone()) ||
+                      "Unknown"}
+                  </p>
                 </div>
 
                 {/* Project Description */}

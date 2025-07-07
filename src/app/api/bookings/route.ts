@@ -9,6 +9,7 @@ import {
   GoogleMeetService,
   type CreateMeetingOptions,
 } from "@/lib/google-meet-service";
+import { TimezoneService } from "@/lib/timezone-service";
 
 // Define proper types to replace 'any'
 interface BookingRecord {
@@ -89,6 +90,8 @@ export async function POST(request: NextRequest) {
       scheduledTime,
       customerData,
       projectDescription,
+      customerTimezone,
+      scheduledTimezone,
       _preferredConsultant, // Optional: if customer has a preference (not used in current implementation)
       assignmentStrategy = "optimal", // 'optimal', 'balanced', 'random', 'specific'
     } = body;
@@ -130,8 +133,21 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Service not found" }, { status: 404 });
     }
 
+    // Detect timezone if not provided
+    const effectiveTimezone =
+      customerTimezone ||
+      scheduledTimezone ||
+      TimezoneService.detectUserTimezone();
+
+    // Create timezone-aware scheduled datetime
+    const scheduledDateTimeInfo = TimezoneService.createScheduledDateTime(
+      scheduledDate,
+      scheduledTime,
+      effectiveTimezone
+    );
+    const scheduledDateTime = scheduledDateTimeInfo.utcDateTime.toJSDate();
+
     // Validate minimum advance time requirement
-    const scheduledDateTime = new Date(`${scheduledDate}T${scheduledTime}:00`);
     const now = new Date();
     const minimumAdvanceHours = service.minimum_advance_hours || 24;
     const minimumStartTime = new Date(
@@ -274,6 +290,8 @@ export async function POST(request: NextRequest) {
           last_name: customerData.lastName,
           phone: customerData.phone,
           company: customerData.company,
+          timezone: effectiveTimezone,
+          customer_timezone: effectiveTimezone,
         },
         project_description_param: projectDescription,
         assignment_strategy_param: assignmentStrategy || "optimal",
@@ -327,27 +345,19 @@ export async function POST(request: NextRequest) {
 
     // Send confirmation email for all bookings (free and paid)
     try {
-      // Format the scheduled time properly
-      const scheduledTimeFormatted = new Date(
-        `${scheduledDate}T${scheduledTime}:00`
-      ).toLocaleTimeString("en-US", {
-        hour: "numeric",
-        minute: "2-digit",
-        hour12: true,
-        timeZoneName: "short",
-      });
-
       await sendBookingConfirmationEmail({
         customerName: `${customerData.firstName} ${customerData.lastName}`,
         customerEmail: customerData.email,
         serviceName: service.name,
         bookingReference: booking.booking_reference,
         scheduledDate: scheduledDate,
-        scheduledTime: scheduledTimeFormatted,
+        scheduledTime: scheduledTime,
+        scheduledDateTime: scheduledDateTimeInfo.scheduledDateTime, // Full ISO datetime for timezone handling
         duration: service.duration_minutes,
         price: service.requires_payment ? service.price : undefined,
         meetingUrl: booking.meeting_url, // Uses Google Meet URL from booking or fallback
         serviceFeatures: service.features, // Pass dynamic features from database
+        customerTimezone: effectiveTimezone, // Include timezone for proper formatting
       });
       console.log("✅ Booking confirmation email sent successfully");
     } catch (emailError) {
@@ -376,15 +386,12 @@ export async function POST(request: NextRequest) {
             bookingReference: booking.booking_reference,
           });
 
-          // Format the scheduled time for WhatsApp (same as email)
-          const scheduledTimeFormatted = new Date(
-            `${scheduledDate}T${scheduledTime}:00`
-          ).toLocaleTimeString("en-US", {
-            hour: "numeric",
-            minute: "2-digit",
-            hour12: true,
-            timeZoneName: "short",
-          });
+          // Format the scheduled date and time for WhatsApp using timezone service
+          const formattedDateTime = TimezoneService.formatDateTime(
+            scheduledDateTimeInfo.scheduledDateTime,
+            undefined,
+            effectiveTimezone
+          );
 
           // Get the template SID from environment variables
           const templateSid = process.env.TWILIO_WHATSAPP_TEMPLATE_SID;
@@ -397,8 +404,8 @@ export async function POST(request: NextRequest) {
                 customerName: `${customerData.firstName} ${customerData.lastName}`,
                 serviceName: service.name,
                 bookingReference: booking.booking_reference,
-                scheduledDate: scheduledDate,
-                scheduledTime: scheduledTimeFormatted,
+                scheduledDate: formattedDateTime.date,
+                scheduledTime: formattedDateTime.time,
                 duration: service.duration_minutes,
                 meetingUrl: booking.meeting_url || "",
               },
@@ -892,6 +899,10 @@ async function getOrCreateCustomerMetrics(
       email: customerData.email,
       lead_source: "website_booking",
       lead_quality: "unqualified",
+      preferred_timezone:
+        customerData.timezone ||
+        customerData.customer_timezone ||
+        TimezoneService.detectUserTimezone(),
     })
     .select()
     .single();

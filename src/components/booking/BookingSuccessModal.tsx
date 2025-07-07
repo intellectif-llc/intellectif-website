@@ -3,6 +3,7 @@
 import React from "react";
 import Link from "next/link";
 import Button from "@/components/ui/Button";
+import { TimezoneService } from "@/lib/timezone-service";
 
 interface BookingDetails {
   booking_reference: string;
@@ -72,17 +73,8 @@ export default function BookingSuccessModal({
             <div className="flex justify-between">
               <span className="text-gray-400">Date & Time:</span>
               <span className="text-white">
-                {new Date(bookingDetails.scheduled_datetime).toLocaleString(
-                  "en-US",
-                  {
-                    weekday: "long",
-                    year: "numeric",
-                    month: "long",
-                    day: "numeric",
-                    hour: "numeric",
-                    minute: "2-digit",
-                    hour12: true,
-                  }
+                {TimezoneService.formatForEmail(
+                  bookingDetails.scheduled_datetime
                 )}
               </span>
             </div>
