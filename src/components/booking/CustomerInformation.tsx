@@ -2,6 +2,8 @@ import React, { useState, useRef, useEffect } from "react";
 import toast from "react-hot-toast";
 import { BookingData } from "@/app/booking/page";
 import "react-international-phone/style.css";
+
+// Phone input styles are now managed in globals.css for better organization
 import { useTurnstile } from "@/hooks/useTurnstile";
 import Turnstile, { type TurnstileRef } from "@/components/ui/Turnstile";
 import { PhoneInput } from "react-international-phone";
@@ -339,16 +341,15 @@ export default function CustomerInformation({
                   <label className="block text-sm font-semibold text-[#6bdcc0] mb-2">
                     Phone Number *
                   </label>
-                  <div className="phone-input-container">
+                  <div
+                    className={`phone-input-container ${
+                      formErrors.phone ? "error" : ""
+                    }`}
+                  >
                     <PhoneInput
                       defaultCountry="us"
                       value={localCustomerData.phone}
                       onChange={(value) => handleInputChange("phone", value)}
-                      className={`w-full px-4 py-3 rounded-xl bg-[#051028] border-2 text-white placeholder-[#64748b] transition-all duration-300 focus:outline-none focus:ring-4 focus:ring-[#6bdcc0]/30 ${
-                        formErrors.phone
-                          ? "border-red-500 focus:border-red-500"
-                          : "border-[#64748b] focus:border-[#6bdcc0]"
-                      }`}
                       placeholder="+1 (555) 123-4567"
                     />
                   </div>
