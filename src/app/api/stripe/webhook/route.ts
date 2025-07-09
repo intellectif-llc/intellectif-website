@@ -7,6 +7,7 @@ import {
   GoogleMeetService,
   type CreateMeetingOptions,
 } from "@/lib/google-meet-service";
+import { TimezoneService } from "@/lib/timezone-service";
 import type Stripe from "stripe";
 
 // Import helper function from bookings API
@@ -186,9 +187,13 @@ async function handlePaymentSucceeded(
       throw new Error("Missing required booking data in payment metadata");
     }
 
-    // Create scheduled datetime
-    const scheduledDateTime = new Date(
-      `${metadata.scheduledDate}T${metadata.scheduledTime}:00`
+    // Use TimezoneService to create a correct, timezone-aware UTC Date object
+    const effectiveTimezone =
+      metadata.customerTimezone || TimezoneService.detectUserTimezone();
+    const scheduledDateTimeInfo = TimezoneService.createScheduledDateTime(
+      metadata.scheduledDate,
+      metadata.scheduledTime,
+      effectiveTimezone
     );
 
     // Create or get customer metrics record
@@ -292,9 +297,7 @@ async function handlePaymentSucceeded(
           });
 
           // Create Google Meet meeting using corporate service
-          const startDateTime = new Date(
-            `${metadata.scheduledDate}T${metadata.scheduledTime}:00`
-          );
+          const startDateTime = scheduledDateTimeInfo.utcDateTime.toJSDate();
           const endDateTime = new Date(
             startDateTime.getTime() + service.duration_minutes * 60000
           );
@@ -382,7 +385,7 @@ async function handlePaymentSucceeded(
         service_id_param: metadata.serviceId,
         scheduled_date_param: metadata.scheduledDate,
         scheduled_time_param: metadata.scheduledTime,
-        scheduled_datetime_param: scheduledDateTime.toISOString(),
+        scheduled_datetime_param: scheduledDateTimeInfo.utcDateTime.toISO(), // Use the timezone-aware UTC date
         customer_metrics_id_param: customerMetrics.id,
         customer_data_param: {
           email: metadata.customerEmail,

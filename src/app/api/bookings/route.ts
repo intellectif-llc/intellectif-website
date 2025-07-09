@@ -232,9 +232,8 @@ export async function POST(request: NextRequest) {
         );
 
         if (isConnected) {
-          const startTime = new Date(
-            `${scheduledDate}T${scheduledTime}:00.000Z`
-          );
+          // Use the correctly calculated timezone-aware Date object
+          const startTime = scheduledDateTime;
           const endTime = new Date(
             startTime.getTime() + service.duration_minutes * 60000
           );

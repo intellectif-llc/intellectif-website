@@ -49,6 +49,7 @@ export async function POST(request: NextRequest) {
         ...(bookingData && {
           scheduledDate: bookingData.scheduledDate,
           scheduledTime: bookingData.scheduledTime,
+          customerTimezone: bookingData.customerData.timezone, // Pass timezone to webhook
           customerFirstName: bookingData.customerData.firstName,
           customerLastName: bookingData.customerData.lastName,
           customerPhone: bookingData.customerData.phone || "",

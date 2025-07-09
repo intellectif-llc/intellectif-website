@@ -72,10 +72,15 @@ export class GoogleMeetService {
         },
         // The organizer MUST be the impersonated user.
         // The service account email should NOT be here.
-        organizer: { email: userToImpersonate },
+        // Adding a displayName makes the invitation look more legitimate.
+        organizer: {
+          email: userToImpersonate,
+          displayName: "Intellectif",
+        },
         attendees: [
           { email: options.customerEmail },
-          { email: userToImpersonate },
+          // Adding the organizer as an accepted attendee ensures it appears on their calendar correctly.
+          { email: userToImpersonate, responseStatus: "accepted" },
         ],
         conferenceData: {
           createRequest: {
