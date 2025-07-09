@@ -7,19 +7,6 @@ export interface GoogleMeetDetails {
   meetingUri: string;
   meetingCode: string;
   name: string;
-  config: {
-    artifact_config?: {
-      recording_config: {
-        auto_recording_generation: "ON" | "OFF";
-      };
-      transcription_config: {
-        auto_transcription_generation: "ON" | "OFF";
-      };
-      smart_notes_config: {
-        auto_smart_notes_generation: "ON" | "OFF";
-      };
-    };
-  };
 }
 
 export interface CreateMeetingOptions {
@@ -140,23 +127,12 @@ export class GoogleMeetService {
         throw new Error("No video conference link found in calendar event");
       }
 
+      // Return only the essential details. The config part was a leftover
+      // from the Meet API and is not used by the Calendar API.
       return {
         meetingUri: meetEntryPoint.uri,
         meetingCode: meetEntryPoint.passcode || "",
         name: calendarEvent.id,
-        config: {
-          artifact_config: {
-            recording_config: {
-              auto_recording_generation: "OFF",
-            },
-            transcription_config: {
-              auto_transcription_generation: "ON",
-            },
-            smart_notes_config: {
-              auto_smart_notes_generation: "ON",
-            },
-          },
-        },
       };
     } catch (error) {
       console.error("❌ Error creating meeting space:", error);
