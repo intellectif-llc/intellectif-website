@@ -6,7 +6,8 @@
     "dev": "next dev --turbopack",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "test:auth": "ts-node --require dotenv/config test-auth.ts"
   },
   "dependencies": {
     "@aws-sdk/client-ses": "^3.830.0",
@@ -38,9 +39,11 @@
     "@types/node": "^20",
     "@types/react": "^18.3.3",
     "@types/react-dom": "^18.3.0",
+    "dotenv": "^17.1.0",
     "eslint": "^8.57.0",
     "eslint-config-next": "^14.2.4",
     "tailwindcss": "^4",
+    "ts-node": "^10.9.2",
     "typescript": "^5"
   }
 }

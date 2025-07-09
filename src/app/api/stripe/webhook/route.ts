@@ -307,7 +307,9 @@ async function handlePaymentSucceeded(
           if (isConnected) {
             const meetingOptions: CreateMeetingOptions = {
               title: `${service.name} - ${metadata.customerFirstName} ${metadata.customerLastName}`,
-              description: `Consultation meeting for: ${metadata.projectDescription || "Paid consultation"}`,
+              description: `Consultation meeting for: ${
+                metadata.projectDescription || "Paid consultation"
+              }`,
               start: startDateTime,
               end: endDateTime,
               consultantId: assignedConsultant.consultant_id,
@@ -320,8 +322,9 @@ async function handlePaymentSucceeded(
               assignedConsultant.consultant_id
             );
 
-            const meetingDetails =
-              await GoogleMeetService.createMeeting(meetingOptions);
+            const meetingDetails = await GoogleMeetService.createMeetingSpace(
+              meetingOptions
+            );
 
             console.log("📱 Google Calendar service response:", {
               hasResponse: !!meetingDetails,

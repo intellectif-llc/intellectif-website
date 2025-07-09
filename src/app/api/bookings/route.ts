@@ -249,7 +249,7 @@ export async function POST(request: NextRequest) {
             customerName: `${customerData.firstName} ${customerData.lastName}`,
           };
 
-          const meetingDetails = await GoogleMeetService.createMeeting(
+          const meetingDetails = await GoogleMeetService.createMeetingSpace(
             meetingOptions
           );
 

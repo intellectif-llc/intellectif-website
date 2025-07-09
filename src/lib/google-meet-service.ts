@@ -1,22 +1,22 @@
-// Google Meet Service - Direct API v2 Implementation
-// Uses Google Meet REST API v2 to create meeting spaces directly
+// Google Meet Service - Service Account Implementation
+// Uses Google Calendar API to create events with Google Meet links
 
-import { google } from "googleapis";
+import { GoogleAuth } from "google-auth-library";
 
 export interface GoogleMeetDetails {
   meetingUri: string;
   meetingCode: string;
   name: string;
   config: {
-    artifactConfig?: {
-      recordingConfig: {
-        autoRecording: "ON";
+    artifact_config?: {
+      recording_config: {
+        auto_recording_generation: "ON" | "OFF";
       };
-      transcriptionConfig: {
-        autoTranscription: "ON";
+      transcription_config: {
+        auto_transcription_generation: "ON" | "OFF";
       };
-      smartNotesConfig: {
-        autoSmartNotesGeneration: "ON";
+      smart_notes_config: {
+        auto_smart_notes_generation: "ON" | "OFF";
       };
     };
   };
@@ -34,224 +34,242 @@ export interface CreateMeetingOptions {
 
 export class GoogleMeetService {
   /**
-   * Creates a Google Meet meeting space with enhanced error handling
+   * Create a Google Meet space with transcription enabled using Google Calendar API
    */
-  static async createMeeting(
-    _options: CreateMeetingOptions
-  ): Promise<GoogleMeetDetails | null> {
+  static async createMeetingSpace(
+    options: CreateMeetingOptions
+  ): Promise<GoogleMeetDetails> {
     try {
-      console.log("🚀 Creating Google Meet via REST API v2...");
+      // This is the real user in your Google Workspace you want to act on behalf of.
+      // The event will be created in this user's calendar.
+      const userToImpersonate = process.env.GOOGLE_CALENDAR_IMPERSONATED_USER;
 
-      // Get access token (will handle refresh token if needed)
-      const accessToken = await this.getAccessToken();
-      if (!accessToken) {
-        console.error("❌ Failed to get access token for Google Meet");
-        return null;
+      if (!userToImpersonate) {
+        throw new Error(
+          "❌ Configuration Error: GOOGLE_CALENDAR_IMPERSONATED_USER environment variable is not set."
+        );
       }
 
-      console.log("✅ Access token obtained, calling Google Meet API...");
+      const accessToken = await this.getServiceAccountAccessToken(
+        userToImpersonate
+      );
 
-      // Call Google Meet REST API v2 - using the working fetch approach
-      const response = await fetch("https://meet.googleapis.com/v2/spaces", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${accessToken}`,
+      if (!accessToken) {
+        throw new Error("Failed to get service account access token.");
+      }
+
+      // Create calendar event with Google Meet using Google Calendar API
+      const eventBody = {
+        summary: options.title,
+        description: options.description,
+        start: {
+          dateTime: options.start.toISOString(),
+          timeZone: "UTC",
         },
-        // Empty body as in your successful test
-        body: JSON.stringify({}),
-      });
+        end: {
+          dateTime: options.end.toISOString(),
+          timeZone: "UTC",
+        },
+        // The organizer MUST be the impersonated user.
+        // The service account email should NOT be here.
+        organizer: { email: userToImpersonate },
+        attendees: [
+          { email: options.customerEmail },
+          { email: userToImpersonate },
+        ],
+        conferenceData: {
+          createRequest: {
+            requestId: `meeting-${Date.now()}-${Math.random()
+              .toString(36)
+              .substring(2, 9)}`,
+            conferenceSolutionKey: {
+              type: "hangoutsMeet",
+            },
+          },
+        },
+      };
 
-      console.log("📡 Google Meet API Response Status:", response.status);
       console.log(
-        "📡 Google Meet API Response Headers:",
-        Object.fromEntries(response.headers.entries())
+        "📋 Creating calendar event with Google Meet:",
+        JSON.stringify(eventBody, null, 2)
+      );
+
+      const response = await fetch(
+        `https://www.googleapis.com/calendar/v3/calendars/primary/events?conferenceDataVersion=1`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(eventBody),
+        }
       );
 
       if (!response.ok) {
         const errorText = await response.text();
-        console.error("❌ Google Meet API error:", {
+        console.error("❌ Google Calendar API Error:", {
           status: response.status,
           statusText: response.statusText,
           error: errorText,
         });
-        return null;
+        throw new Error(
+          `Google Calendar API error: ${response.status} ${response.statusText} - ${errorText}`
+        );
       }
 
-      const meetingData = await response.json();
-      console.log("✅ Google Meet API response:", meetingData);
+      const calendarEvent = await response.json();
+      console.log("✅ Calendar event created successfully:", calendarEvent);
 
-      // Extract meeting details from the response
-      const meetingUrl = meetingData.meetingUri;
-      const meetingCode = meetingData.meetingCode;
-      const spaceName = meetingData.name; // e.g., "spaces/uPC1ky0qbXAB"
-
-      if (!meetingUrl) {
-        console.error("❌ No meeting URL in response");
-        return null;
+      // Extract Google Meet details from the calendar event
+      const conferenceData = calendarEvent.conferenceData;
+      if (!conferenceData || !conferenceData.entryPoints) {
+        throw new Error("No Google Meet link found in calendar event response");
       }
 
-      console.log("✅ Google Meet created successfully:");
-      console.log("📅 Meeting URL:", meetingUrl);
-      console.log("🔑 Meeting Code:", meetingCode);
-      console.log("📍 Space Name:", spaceName);
+      const meetEntryPoint = conferenceData.entryPoints.find(
+        (entry: any) => entry.entryPointType === "video"
+      );
+
+      if (!meetEntryPoint) {
+        throw new Error("No video conference link found in calendar event");
+      }
 
       return {
-        meetingUri: meetingUrl,
-        meetingCode: meetingCode || spaceName,
-        name: spaceName,
+        meetingUri: meetEntryPoint.uri,
+        meetingCode: meetEntryPoint.passcode || "",
+        name: calendarEvent.id,
         config: {
-          // Note: artifactConfig requires Google Workspace
-          // Disable until workspace is set up
-          // artifactConfig: {
-          //   recordingConfig: { autoRecording: "ON" },
-          //   transcriptionConfig: { autoTranscription: "ON" },
-          //   smartNotesConfig: { autoSmartNotesGeneration: "ON" }
-          // }
+          artifact_config: {
+            recording_config: {
+              auto_recording_generation: "OFF",
+            },
+            transcription_config: {
+              auto_transcription_generation: "ON",
+            },
+            smart_notes_config: {
+              auto_smart_notes_generation: "ON",
+            },
+          },
         },
       };
-    } catch (error: any) {
-      console.error("❌ Error creating Google Meet:", error);
-
-      // Enhanced error handling for production
-      if (
-        error.status === 401 ||
-        error.message?.includes("invalid_grant") ||
-        error.message?.includes("Invalid authentication credentials")
-      ) {
-        console.error("🔑 REFRESH TOKEN EXPIRED OR REVOKED - Action Required:");
-        console.error("1. Go to https://developers.google.com/oauthplayground");
-        console.error("2. Use your own OAuth credentials");
-        console.error("3. Request scopes: calendar, meet.meetings");
-        console.error("4. Generate new refresh token");
-        console.error("5. Update GOOGLE_REFRESH_TOKEN environment variable");
-        console.error("6. Restart the application");
-      } else if (error.status === 403) {
-        console.error(
-          "🚫 Google Meet API access denied - check API enablement and scopes"
-        );
-      } else if (error.status === 429) {
-        console.error("⏰ Rate limit exceeded - implement exponential backoff");
-      }
-
-      return null;
+    } catch (error) {
+      console.error("❌ Error creating meeting space:", error);
+      throw error;
     }
   }
 
   /**
-   * Get access token with improved error handling for production
+   * Get access token using a service account impersonating a domain user.
    */
-  private static async getAccessToken(): Promise<string | null> {
+  private static async getServiceAccountAccessToken(
+    userToImpersonate: string
+  ): Promise<string | null> {
     try {
-      const clientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
-      const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
-      const refreshToken = process.env.GOOGLE_REFRESH_TOKEN;
+      const serviceAccountKey = process.env.GOOGLE_SERVICE_ACCOUNT_KEY;
+      // This must be the service account's own email address
+      const serviceAccountEmail = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL;
 
-      if (!clientId || !clientSecret || !refreshToken) {
-        console.error("❌ Missing Google OAuth credentials");
+      if (!serviceAccountKey || !serviceAccountEmail) {
+        console.error("❌ Missing service account credentials in .env");
         return null;
       }
 
-      console.log("📋 Google OAuth Configuration:", {
-        clientId: clientId.substring(0, 20) + "...",
-        clientSecret: clientSecret
-          ? "GOCSPX-" + clientSecret.substring(6, 15) + "..."
-          : "Missing",
-        refreshToken: refreshToken.substring(0, 20) + "...",
+      let serviceAccountCredentials;
+      try {
+        serviceAccountCredentials = JSON.parse(serviceAccountKey);
+      } catch (e) {
+        try {
+          const decodedKey = Buffer.from(serviceAccountKey, "base64").toString(
+            "utf-8"
+          );
+          serviceAccountCredentials = JSON.parse(decodedKey);
+        } catch (error) {
+          console.error("❌ Failed to parse service account key.", error);
+          return null;
+        }
+      }
+
+      // The scope is fixed for this service. Hardcode it to avoid environment-related errors.
+      const scopes = ["https://www.googleapis.com/auth/calendar.events"];
+
+      // Initialize Google Auth with credentials and the user to impersonate
+      const auth = new GoogleAuth({
+        credentials: serviceAccountCredentials,
+        scopes: scopes,
+        // This is the key to making domain-wide delegation work
+        clientOptions: {
+          subject: userToImpersonate,
+        },
       });
 
-      // Initialize OAuth2 client
-      const oauth2Client = new google.auth.OAuth2(
-        clientId,
-        clientSecret,
-        "https://developers.google.com/oauthplayground"
-      );
+      console.log(`🔄 Getting access token to act as ${userToImpersonate}...`);
+      const authClient = await auth.getClient();
+      const accessTokenResponse = await authClient.getAccessToken();
 
-      // Set refresh token
-      oauth2Client.setCredentials({
-        refresh_token: refreshToken,
-      });
-
-      console.log("🔄 Refreshing Google access token...");
-
-      // Get new access token
-      const { token } = await oauth2Client.getAccessToken();
-
-      if (!token) {
-        console.error("❌ Failed to refresh access token");
+      if (!accessTokenResponse.token) {
+        console.error("❌ Failed to retrieve access token.");
         return null;
       }
 
-      console.log("✅ Access token refreshed successfully");
-      return token;
+      console.log("✅ Service account access token obtained successfully.");
+      return accessTokenResponse.token;
     } catch (error: any) {
-      console.error("❌ Error refreshing access token:", error);
-
-      // Production-specific error handling
+      console.error("❌ Error getting service account access token:", error);
       if (error.message?.includes("invalid_grant")) {
+        console.error("🔑 CRITICAL: Service account authentication failed!");
         console.error(
-          "🔑 CRITICAL: Refresh token has expired or been revoked!"
+          "📋 Check that Domain-Wide Delegation is enabled, the impersonated user exists, and the correct scopes are authorized in your Google Workspace Admin Console."
         );
-        console.error("📋 Error details:", {
-          error: error.response?.data?.error,
-          error_description: error.response?.data?.error_description,
-          timestamp: new Date().toISOString(),
-        });
-        console.error(
-          "🛠️ REQUIRED ACTION: Generate new refresh token using OAuth 2.0 Playground"
-        );
-      } else if (error.code === "ENOTFOUND" || error.code === "ETIMEDOUT") {
-        console.error("🌐 Network error - check internet connection");
       }
-
       return null;
     }
   }
 
   /**
-   * Check if Google Meet integration is configured
+   * Check if the integration is configured to connect on behalf of a user.
    */
   static async isConsultantConnected(consultantId: string): Promise<boolean> {
-    const hasOAuthCredentials = !!(
-      process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID &&
-      process.env.GOOGLE_CLIENT_SECRET &&
-      process.env.GOOGLE_REFRESH_TOKEN
-    );
+    try {
+      console.log(
+        `🔍 Checking service account connectivity for consultant: ${consultantId}`
+      );
 
-    console.log("🔍 Checking consultant connection:", {
-      consultantId,
-      hasCredentials: hasOAuthCredentials,
-    });
+      const userToImpersonate = process.env.GOOGLE_CALENDAR_IMPERSONATED_USER;
+      if (!userToImpersonate) {
+        console.log("❌ GOOGLE_CALENDAR_IMPERSONATED_USER is not set.");
+        return false;
+      }
 
-    return hasOAuthCredentials;
+      const accessToken = await this.getServiceAccountAccessToken(
+        userToImpersonate
+      );
+
+      if (!accessToken) {
+        console.log(
+          `❌ Service account not configured correctly for consultant: ${consultantId}`
+        );
+        return false;
+      }
+
+      console.log(
+        `✅ Service account available to act for consultant: ${consultantId}`
+      );
+      return true;
+    } catch (error) {
+      console.error(
+        `❌ Error checking consultant connection for ${consultantId}:`,
+        error
+      );
+      return false;
+    }
   }
 
   /**
-   * Generate OAuth URL for initial setup (if needed)
+   * Get authentication URL (not needed for service accounts)
    */
   static getAuthUrl(): string | null {
-    try {
-      const clientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
-      if (!clientId) return null;
-
-      const oauth2Client = new google.auth.OAuth2(
-        clientId,
-        process.env.GOOGLE_CLIENT_SECRET,
-        "https://developers.google.com/oauthplayground"
-      );
-
-      const authUrl = oauth2Client.generateAuthUrl({
-        access_type: "offline",
-        scope: [
-          "https://www.googleapis.com/auth/meetings.space.created" as const,
-        ],
-        prompt: "consent",
-      });
-
-      return authUrl;
-    } catch (error) {
-      console.error("❌ Error generating auth URL:", error);
-      return null;
-    }
+    console.log("ℹ️ Service accounts don't require user authentication URLs.");
+    return null;
   }
 }
