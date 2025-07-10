@@ -37,7 +37,17 @@ const HeroSection: React.FC = () => {
             </span>
           </h1>
 
-          <p className="text-lg sm:text-xl md:text-2xl text-[#64748b] mb-8 sm:mb-10 md:mb-12 max-w-3xl mx-auto leading-relaxed px-4">
+          <p
+            className="text-lg sm:text-xl md:text-2xl text-[#8798b0] mb-8 sm:mb-10 md:mb-12 max-w-3xl mx-auto leading-relaxed px-4"
+            style={{
+              textShadow: `
+                0 2px 8px rgba(5, 16, 40, 0.8),
+                0 4px 16px rgba(5, 16, 40, 0.6),
+                0 0 20px rgba(107, 220, 192, 0.15),
+                0 0 40px rgba(107, 220, 192, 0.1)
+              `,
+            }}
+          >
             We automate the day-to-day, so you can focus on the big picture.
             It's time to build a more profitable and enjoyable business for you.
           </p>
