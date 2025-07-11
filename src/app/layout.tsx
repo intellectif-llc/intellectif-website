@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Script from "next/script";
 import { AuthProvider } from "@/contexts/AuthContext";
 import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
@@ -64,6 +65,18 @@ export default function RootLayout({
             </div>
           </AuthProvider>
         </QueryProvider>
+
+        {/* Start of Rocket.Chat Livechat Script */}
+        <Script id="rocketchat-livechat" strategy="lazyOnload">
+          {`
+	(function(w, d, s, u) {
+		w.RocketChat = function(c) { w.RocketChat._.push(c) }; w.RocketChat._ = []; w.RocketChat.url = u;
+		var h = d.getElementsByTagName(s)[0], j = d.createElement(s);
+		j.async = true; j.src = 'https://chat.intellectif.com/livechat/rocketchat-livechat.min.js?_=201903270000';
+		h.parentNode.insertBefore(j, h);
+	})(window, document, 'script', 'https://chat.intellectif.com/livechat');
+          `}
+        </Script>
       </body>
     </html>
   );
