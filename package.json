@@ -6,10 +6,12 @@
     "dev": "next dev --turbopack",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "test:dialogflow": "node scripts/test-dialogflow-integration.js"
   },
   "dependencies": {
     "@aws-sdk/client-ses": "^3.830.0",
+    "@google-cloud/dialogflow-cx": "^5.2.0",
     "@marsidev/react-turnstile": "^1.1.0",
     "@react-email/components": "^0.1.0",
     "@react-email/render": "^1.1.2",
