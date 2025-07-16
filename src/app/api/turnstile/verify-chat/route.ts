@@ -41,13 +41,13 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    console.log("📥 ChatVerification: Processing request", {
+    /*     console.log("📥 ChatVerification: Processing request", {
       tokenLength: token.length,
       tokenPreview: token.substring(0, 20) + "...",
       sessionId: sessionId || "none",
       refreshAttempt,
       isRefresh: refreshAttempt ? "🔄" : "🆕",
-    });
+    }); */
 
     // Check environment configuration
     const secretKey = process.env.TURNSTILE_CHAT_SECRET_KEY;
@@ -76,11 +76,11 @@ export async function POST(request: NextRequest) {
       request.headers.get("x-real-ip") ||
       "unknown";
 
-    console.log("🌐 ChatVerification: Client details", {
+    /*     console.log("🌐 ChatVerification: Client details", {
       ip: clientIP,
       cfCountry: request.headers.get("cf-ipcountry") || "unknown",
       cfRay: request.headers.get("cf-ray") || "none",
-    });
+    }); */
 
     // Prepare verification request
     const formData = new FormData();
@@ -114,7 +114,7 @@ export async function POST(request: NextRequest) {
 
     const verificationDuration = Date.now() - verificationStartTime;
 
-    console.log("📡 ChatVerification: Cloudflare response received", {
+    /* console.log("📡 ChatVerification: Cloudflare response received", {
       responseStatus: response.status,
       responseOk: response.ok,
       verificationDuration: verificationDuration + "ms",
@@ -122,18 +122,18 @@ export async function POST(request: NextRequest) {
         contentType: response.headers.get("content-type"),
         cfRay: response.headers.get("cf-ray"),
       },
-    });
+    }); */
 
     const result: TurnstileChatResponse = await response.json();
 
-    console.log("📊 ChatVerification: Cloudflare result", {
+    /*     console.log("📊 ChatVerification: Cloudflare result", {
       success: result.success,
       errorCodes: result["error-codes"] || [],
       challengeTimestamp: result.challenge_ts,
       hostname: result.hostname,
       action: result.action,
       hasCustomData: !!result.cdata,
-    });
+    }); */
 
     if (!response.ok) {
       console.error("❌ ChatVerification: Cloudflare API error", {

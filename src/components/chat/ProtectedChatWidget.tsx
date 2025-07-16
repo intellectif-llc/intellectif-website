@@ -30,7 +30,7 @@ export default function ProtectedChatWidget({
     clearSession,
   } = useChatProtection();
 
-  console.log("🔧 ProtectedChatWidget: Render state", {
+  /* console.log("🔧 ProtectedChatWidget: Render state", {
     isVerified,
     isLoading,
     hasError: !!error,
@@ -39,7 +39,7 @@ export default function ProtectedChatWidget({
     rocketChatLoaded,
     showFallback,
     verificationAttempts: verificationAttempts.current,
-  });
+  }); */
 
   // Handle turnstile success
   const handleTurnstileSuccess = useCallback(
