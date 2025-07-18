@@ -302,10 +302,10 @@ async function sendToDialogflowCX(
     }
 
     console.log("🔧 Dialogflow CX: Configuration", {
-      projectId,
+      projectId: `...${projectId.slice(-4)}`,
       location,
-      agentId,
-      sessionId,
+      agentId: `...${agentId.slice(-4)}`,
+      sessionId: `...${sessionId.slice(-4)}`,
       hasUserEmail: !!userEmail,
       hasUserName: !!userName,
     });
@@ -359,7 +359,7 @@ async function sendToDialogflowCX(
     }
 
     console.log("📤 Dialogflow CX: Sending request", {
-      sessionPath,
+      sessionPath: `...${sessionPath.slice(-20)}`,
       messageLength: message.length,
       hasParameters: !!detectIntentRequest.queryParams,
     });
@@ -416,9 +416,26 @@ async function processDialogflowResponse(extractedData: {
 
     // Send typing indicator
     const typingResult = await sendTypingIndicator(extractedData.roomId, true);
-    console.log("💭 Background: Typing indicator sent", {
+    console.log("💭 Background: Typing indicator result", {
       success: typingResult.success,
+      error: typingResult.error,
+      hasCredentials: !!(
+        process.env.ROCKETCHAT_AUTH_TOKEN && process.env.ROCKETCHAT_USER_ID
+      ),
     });
+
+    if (!typingResult.success) {
+      console.error(
+        "❌ Background: Typing indicator failed - this may indicate missing RocketChat credentials",
+        {
+          error: typingResult.error,
+          hasAuthToken: !!process.env.ROCKETCHAT_AUTH_TOKEN,
+          hasUserId: !!process.env.ROCKETCHAT_USER_ID,
+          authTokenLength: process.env.ROCKETCHAT_AUTH_TOKEN?.length,
+          userIdLength: process.env.ROCKETCHAT_USER_ID?.length,
+        }
+      );
+    }
 
     // Process with Dialogflow CX
     const dialogflowStartTime = Date.now();
@@ -437,7 +454,29 @@ async function processDialogflowResponse(extractedData: {
       responseLength: dialogflowResponse.response?.length || 0,
       intent: dialogflowResponse.intent,
       confidence: dialogflowResponse.confidence,
+      error: dialogflowResponse.error,
+      hasDialogflowCredentials: !!(
+        process.env.DIALOGFLOW_PROJECT_ID &&
+        process.env.DIALOGFLOW_CLIENT_EMAIL &&
+        process.env.DIALOGFLOW_PRIVATE_KEY &&
+        process.env.DIALOGFLOW_AGENT_ID
+      ),
     });
+
+    if (!dialogflowResponse.success) {
+      console.error("❌ Background: Dialogflow CX failed", {
+        error: dialogflowResponse.error,
+        hasProjectId: !!process.env.DIALOGFLOW_PROJECT_ID,
+        hasClientEmail: !!process.env.DIALOGFLOW_CLIENT_EMAIL,
+        hasPrivateKey: !!process.env.DIALOGFLOW_PRIVATE_KEY,
+        hasAgentId: !!process.env.DIALOGFLOW_AGENT_ID,
+        hasLocation: !!process.env.DIALOGFLOW_LOCATION,
+        privateKeyValid: process.env.DIALOGFLOW_PRIVATE_KEY?.includes(
+          "-----BEGIN PRIVATE KEY-----"
+        ),
+        duration: dialogflowDuration + "ms",
+      });
+    }
 
     // Stop typing indicator
     await sendTypingIndicator(extractedData.roomId, false);
@@ -456,7 +495,20 @@ async function processDialogflowResponse(extractedData: {
         success: rocketChatResponse.success,
         duration: rocketChatDuration + "ms",
         messageId: rocketChatResponse.messageId,
+        error: rocketChatResponse.error,
       });
+
+      if (!rocketChatResponse.success) {
+        console.error("❌ Background: RocketChat message sending failed", {
+          error: rocketChatResponse.error,
+          roomId: extractedData.roomId,
+          messageLength: dialogflowResponse.response?.length || 0,
+          hasCredentials: !!(
+            process.env.ROCKETCHAT_AUTH_TOKEN && process.env.ROCKETCHAT_USER_ID
+          ),
+          duration: rocketChatDuration + "ms",
+        });
+      }
 
       const totalDuration = Date.now() - processingStartTime;
       console.log("✅ Background: Processing complete", {

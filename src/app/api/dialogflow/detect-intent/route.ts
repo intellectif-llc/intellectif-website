@@ -2,9 +2,14 @@ import { NextRequest, NextResponse } from "next/server";
 import { SessionsClient } from "@google-cloud/dialogflow-cx";
 
 export async function POST(request: NextRequest) {
+  let message: string | undefined;
+  let sessionId: string | undefined;
+
   try {
     // Get the message from the request body
-    const { message, sessionId } = await request.json();
+    const body = await request.json();
+    message = body.message;
+    sessionId = body.sessionId;
 
     if (!message || !sessionId) {
       return NextResponse.json(
@@ -31,6 +36,16 @@ export async function POST(request: NextRequest) {
       client_email: clientEmail,
       private_key: privateKey.replace(/\\n/g, "\n"), // Handle escaped newlines
     };
+
+    // Log sanitized credential info
+    console.log("Dialogflow credentials prepared", {
+      client_email_preview: `${clientEmail.substring(
+        0,
+        5
+      )}...${clientEmail.slice(-10)}`,
+      private_key: "[REDACTED]",
+      project_id: `${projectId.substring(0, 5)}...${projectId.slice(-4)}`,
+    });
 
     // Get location and construct the correct API endpoint
     const location = process.env.DIALOGFLOW_LOCATION || "us-central1";
@@ -85,7 +100,12 @@ export async function POST(request: NextRequest) {
       sessionId,
     });
   } catch (error) {
-    console.error("Error communicating with Dialogflow:", error);
+    // Log error without sensitive data
+    console.error("Error communicating with Dialogflow:", {
+      error_message: error instanceof Error ? error.message : "Unknown error",
+      error_name: error instanceof Error ? error.name : "Unknown",
+      session_id: sessionId ? `...${sessionId.slice(-4)}` : "[MISSING]",
+    });
     return NextResponse.json(
       { success: false, error: "Failed to communicate with Dialogflow" },
       { status: 500 }
