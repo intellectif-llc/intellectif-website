@@ -1,9 +1,10 @@
 import type { Metadata } from "next";
+import Script from "next/script";
 import { AuthProvider } from "@/contexts/AuthContext";
 import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
 import QueryProvider from "@/components/providers/QueryProvider";
-import ProtectedChatWidget from "@/components/chat/ProtectedChatWidget";
+// import ProtectedChatWidget from "@/components/chat/ProtectedChatWidget";
 import { Toaster } from "react-hot-toast";
 import "./globals.css";
 
@@ -67,7 +68,21 @@ export default function RootLayout({
         </QueryProvider>
 
         {/* Protected Rocket.Chat Widget with Turnstile Bot Protection */}
-        <ProtectedChatWidget />
+        {/* <ProtectedChatWidget /> */}
+
+        {/* Google Analytics Script */}
+        <Script
+          src="https://www.googletagmanager.com/gtag/js?id=G-VKMTFF0W4D"
+          strategy="afterInteractive"
+        />
+        <Script id="google-analytics" strategy="afterInteractive">
+          {`
+            window.dataLayer = window.dataLayer || [];
+            function gtag(){dataLayer.push(arguments);}
+            gtag('js', new Date());
+            gtag('config', 'G-VKMTFF0W4D');
+          `}
+        </Script>
       </body>
     </html>
   );

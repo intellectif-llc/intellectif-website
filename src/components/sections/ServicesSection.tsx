@@ -16,11 +16,11 @@ function ServiceModal({ service, isOpen, onClose }: ServiceModalProps) {
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center modal-backdrop"
+      className="fixed inset-0 z-50 flex items-center justify-center modal-backdrop overflow-y-auto py-10"
       onClick={onClose}
     >
       <div
-        className="modal-content p-8 rounded-xl max-w-2xl w-full mx-4 transform transition-all duration-300 scale-100"
+        className="modal-content p-6 sm:p-8 rounded-xl max-w-2xl w-full mx-4 my-auto transform transition-all duration-300 scale-100 max-h-[90vh] overflow-y-auto"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between mb-6">
