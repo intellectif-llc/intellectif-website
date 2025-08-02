@@ -65,21 +65,21 @@ export const SERVICES: ServiceItem[] = [
     ],
   },
   {
-    id: "digital-marketing",
-    title: "Digital Marketing",
-    description: "Strategic online marketing to grow your business reach",
-    icon: "/digital-marketing.png",
+    id: "moodle",
+    title: "Moodle Solutions",
+    description: "Complete Moodle learning management system expertise",
+    icon: "/moodle.png",
     details:
-      "Grow your online presence with our comprehensive digital marketing services. We offer SEO optimization, social media marketing, content strategy, email marketing, PPC advertising, and analytics tracking. Our data-driven approach ensures your marketing efforts deliver measurable results and help you reach your target audience effectively.",
+      "Transform your educational or training programs with our comprehensive Moodle expertise. We specialize in creating custom learning environments that engage learners and streamline administration. From initial setup to ongoing management, we handle every aspect of your Moodle platform to ensure it meets your organization's unique needs.",
     fullDescription:
-      "Grow your online presence with our comprehensive digital marketing services. We offer SEO optimization, social media marketing, content strategy, email marketing, PPC advertising, and analytics tracking. Our data-driven approach ensures your marketing efforts deliver measurable results and help you reach your target audience effectively.",
+      "Transform your educational or training programs with our comprehensive Moodle expertise. We specialize in creating custom learning environments that engage learners and streamline administration. From initial setup to ongoing management, we handle every aspect of your Moodle platform to ensure it meets your organization's unique needs.",
     features: [
-      "SEO optimization",
-      "Social media marketing",
-      "Content strategy",
-      "Email marketing campaigns",
-      "PPC advertising",
-      "Analytics and reporting",
+      "Custom plugin development",
+      "Server deployment & setup",
+      "Platform management & maintenance",
+      "Web services integration",
+      "Theme customization",
+      "Performance optimization",
     ],
   },
   {
