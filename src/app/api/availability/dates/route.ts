@@ -7,7 +7,7 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
 
     const serviceId = searchParams.get("service_id");
-    const daysAhead = parseInt(searchParams.get("days_ahead") || "14");
+    const daysAhead = parseInt(searchParams.get("days_ahead") || "45");
 
     // Get service details including minimum advance hours
     let serviceDuration = 60; // Default
@@ -195,11 +195,7 @@ export async function GET(request: NextRequest) {
 
       currentDate.setDate(currentDate.getDate() + 1);
 
-      // Stop if we have enough available dates
-      if (availableDates.length >= 10) {
-        console.log("🛑 Reached maximum available dates (10), stopping search");
-        break;
-      }
+      // Continue searching through all requested days to ensure calendar coverage
     }
 
     console.log("\n🎯 FINAL RESULTS:", {

@@ -54,6 +54,14 @@ export default function BookingPage() {
   const handlePreviousStep = () => {
     if (currentStep > 1) {
       setCurrentStep(currentStep - 1);
+      // Clear subsequent step data when going back
+      if (currentStep === 2) {
+        // Going back from date selection, clear date/time
+        setBookingData(prev => ({ ...prev, dateTime: null }));
+      } else if (currentStep === 3) {
+        // Going back from customer info, clear customer data
+        setBookingData(prev => ({ ...prev, customer: null }));
+      }
     }
   };
 
@@ -77,6 +85,8 @@ export default function BookingPage() {
               updateBookingData("service", service)
             }
             onNext={handleNextStep}
+            onPrevious={handlePreviousStep}
+            showBackButton={false} // No back button on first step
           />
         );
       case 2:

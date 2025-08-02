@@ -93,7 +93,7 @@ const fetchServices = async (): Promise<{ services: Service[] }> => {
 
 const fetchAvailableDates = async (
   serviceId?: string,
-  daysAhead: number = 21
+  daysAhead: number = 45
 ): Promise<{
   availableDates: AvailableDate[];
   serviceDuration: number;
@@ -171,7 +171,7 @@ export function useServices() {
   });
 }
 
-export function useAvailableDates(serviceId?: string, daysAhead: number = 21) {
+export function useAvailableDates(serviceId?: string, daysAhead: number = 45) {
   return useQuery({
     queryKey: queryKeys.availableDates(serviceId, daysAhead),
     queryFn: () => fetchAvailableDates(serviceId, daysAhead),

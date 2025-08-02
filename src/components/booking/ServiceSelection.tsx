@@ -5,12 +5,16 @@ interface ServiceSelectionProps {
   selectedService: Service | null;
   onServiceSelect: (service: Service) => void;
   onNext: () => void;
+  onPrevious?: () => void;
+  showBackButton?: boolean;
 }
 
 export default function ServiceSelection({
   selectedService,
   onServiceSelect,
   onNext,
+  onPrevious,
+  showBackButton = false,
 }: ServiceSelectionProps) {
   const { data: services = [], isLoading: loading, error } = useServices();
 
@@ -188,9 +192,46 @@ export default function ServiceSelection({
         ))}
       </div>
 
-      {/* Continue Button */}
-      {selectedService && (
-        <div className="text-center">
+      {/* Navigation Buttons */}
+      <div className="flex flex-col sm:flex-row gap-4 justify-between">
+        {showBackButton && onPrevious && (
+          <button
+            onClick={onPrevious}
+            className="group relative inline-flex items-center justify-center px-8 py-4 text-lg font-bold text-[#6bdcc0] rounded-2xl transition-all duration-500 ease-out hover:scale-[1.02] shadow-xl focus:outline-none focus:ring-4 focus:ring-[#6bdcc0]/30 focus:ring-offset-2 focus:ring-offset-[#051028] transform hover:-translate-y-2 overflow-hidden backdrop-blur-sm"
+            style={{
+              background: "rgba(30, 41, 59, 0.4)",
+              border: "2px solid #6bdcc0",
+              boxShadow: "0 8px 32px rgba(107, 220, 192, 0.2)",
+            }}
+          >
+            <svg
+              className="w-5 h-5 mr-2 relative z-20 text-[#6bdcc0]"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M15 19l-7-7 7-7"
+              />
+            </svg>
+            <span className="relative z-20 font-bold tracking-wide group-hover:text-[#051028] transition-all duration-500">
+              Back
+            </span>
+            <div
+              className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-all duration-500 ease-out rounded-2xl"
+              style={{
+                background:
+                  "linear-gradient(135deg, #22d3ee 0%, #0ea5e9 50%, #6bdcc0 100%)",
+                boxShadow: "inset 0 1px 0 rgba(255, 255, 255, 0.2)",
+              }}
+            ></div>
+          </button>
+        )}
+
+        {selectedService && (
           <button
             onClick={onNext}
             className="group relative inline-flex items-center justify-center px-10 py-4 text-lg font-bold rounded-2xl transition-all duration-500 ease-out hover:scale-[1.02] shadow-xl focus:outline-none focus:ring-4 focus:ring-[#6bdcc0]/30 focus:ring-offset-2 focus:ring-offset-[#051028] transform hover:-translate-y-2 overflow-hidden backdrop-blur-sm"
@@ -233,8 +274,8 @@ export default function ServiceSelection({
               <div className="absolute inset-0 -skew-x-12 bg-gradient-to-r from-transparent via-white/20 to-transparent animate-pulse"></div>
             </div>
           </button>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 }
