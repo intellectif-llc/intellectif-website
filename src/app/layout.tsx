@@ -4,7 +4,7 @@ import { AuthProvider } from "@/contexts/AuthContext";
 import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
 import QueryProvider from "@/components/providers/QueryProvider";
-import ProtectedChatWidget from "@/components/chat/ProtectedChatWidget";
+// import ProtectedChatWidget from "@/components/chat/ProtectedChatWidget";
 import { Toaster } from "react-hot-toast";
 import "./globals.css";
 
@@ -68,7 +68,7 @@ export default function RootLayout({
         </QueryProvider>
 
         {/* Protected Rocket.Chat Widget with Turnstile Bot Protection */}
-        <ProtectedChatWidget />
+        {/* <ProtectedChatWidget /> */}
 
         {/* Google Analytics Script */}
         <Script
