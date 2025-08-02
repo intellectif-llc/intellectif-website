@@ -5,7 +5,7 @@ import {
   invalidateBookingQueries,
 } from "@/lib/react-query";
 import toast from "react-hot-toast";
-import { useCallback, useRef } from "react";
+
 
 // Types
 export interface Service {
@@ -93,7 +93,7 @@ const fetchServices = async (): Promise<{ services: Service[] }> => {
 
 const fetchAvailableDates = async (
   serviceId?: string,
-  daysAhead: number = 45
+  daysAhead: number = 30
 ): Promise<{
   availableDates: AvailableDate[];
   serviceDuration: number;
@@ -171,7 +171,7 @@ export function useServices() {
   });
 }
 
-export function useAvailableDates(serviceId?: string, daysAhead: number = 45) {
+export function useAvailableDates(serviceId?: string, daysAhead: number = 30) {
   return useQuery({
     queryKey: queryKeys.availableDates(serviceId, daysAhead),
     queryFn: () => fetchAvailableDates(serviceId, daysAhead),
@@ -258,52 +258,4 @@ export function useOptimisticTimeSlots(date: string, serviceId?: string) {
   return { updateTimeSlotOptimistically };
 }
 
-// Throttled prefetch to prevent excessive API calls
-export function usePrefetchTimeSlots() {
-  const queryClient = useQueryClient();
-  const prefetchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const lastPrefetchRef = useRef<string>("");
 
-  const prefetchTimeSlots = useCallback(
-    (date: string, serviceId?: string) => {
-      if (!date || !serviceId) return;
-
-      const cacheKey = `${date}-${serviceId}`;
-
-      // Don't prefetch the same data twice in quick succession
-      if (lastPrefetchRef.current === cacheKey) return;
-
-      // Clear any existing timeout
-      if (prefetchTimeoutRef.current) {
-        clearTimeout(prefetchTimeoutRef.current);
-      }
-
-      // Throttle prefetch requests to prevent excessive API calls
-      prefetchTimeoutRef.current = setTimeout(() => {
-        // Check if data is already in cache and still fresh
-        const existingData = queryClient.getQueryData(
-          queryKeys.timeSlots(date, serviceId)
-        );
-        const queryState = queryClient.getQueryState(
-          queryKeys.timeSlots(date, serviceId)
-        );
-
-        // Only prefetch if data doesn't exist or is stale
-        if (
-          !existingData ||
-          (queryState && Date.now() - queryState.dataUpdatedAt > 60000)
-        ) {
-          queryClient.prefetchQuery({
-            queryKey: queryKeys.timeSlots(date, serviceId),
-            queryFn: () => fetchTimeSlots(date, serviceId),
-            staleTime: 1 * 60 * 1000, // 1 minute stale time for prefetched data
-          });
-          lastPrefetchRef.current = cacheKey;
-        }
-      }, 300); // 300ms throttle
-    },
-    [queryClient]
-  );
-
-  return { prefetchTimeSlots };
-}
