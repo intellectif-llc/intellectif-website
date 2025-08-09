@@ -234,18 +234,18 @@ export default function CustomerInformation({
           </p>
         </div>
 
-        <div className="grid lg:grid-cols-3 gap-12">
+        <div className="grid lg:grid-cols-3 gap-6 lg:gap-12">
           {/* Customer Information Form */}
           <div className="lg:col-span-2">
             <div
-              className="p-8 rounded-2xl"
+              className="p-4 sm:p-6 lg:p-8 rounded-2xl"
               style={{
                 background: "rgba(30, 41, 59, 0.4)",
                 border: "2px solid rgba(107, 220, 192, 0.2)",
                 boxShadow: "0 8px 32px rgba(107, 220, 192, 0.1)",
               }}
             >
-              <h3 className="text-2xl font-bold text-white mb-8 flex items-center">
+              <h3 className="text-xl sm:text-2xl font-bold text-white mb-6 sm:mb-8 flex items-center">
                 <svg
                   className="w-6 h-6 text-[#6bdcc0] mr-3"
                   fill="none"
@@ -262,7 +262,7 @@ export default function CustomerInformation({
                 Your Information
               </h3>
 
-              <div className="grid md:grid-cols-2 gap-6">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
                 {/* First Name */}
                 <div>
                   <label className="block text-sm font-semibold text-[#6bdcc0] mb-2">
@@ -361,7 +361,7 @@ export default function CustomerInformation({
                 </div>
 
                 {/* Company */}
-                <div className="md:col-span-2">
+                <div className="sm:col-span-2">
                   <label className="block text-sm font-semibold text-[#6bdcc0] mb-2">
                     Company Name *
                   </label>
@@ -386,7 +386,7 @@ export default function CustomerInformation({
                 </div>
 
                 {/* Timezone */}
-                <div className="md:col-span-2">
+                <div className="sm:col-span-2">
                   <label className="block text-sm font-semibold text-[#6bdcc0] mb-2">
                     Your Timezone
                   </label>
@@ -412,7 +412,7 @@ export default function CustomerInformation({
                 </div>
 
                 {/* Project Description */}
-                <div className="md:col-span-2">
+                <div className="sm:col-span-2">
                   <label className="block text-sm font-semibold text-[#6bdcc0] mb-2">
                     Project Description *
                   </label>
@@ -437,7 +437,7 @@ export default function CustomerInformation({
                 </div>
 
                 {/* Turnstile Integration */}
-                <div className="md:col-span-2 flex justify-center py-4">
+                <div className="sm:col-span-2 flex justify-center py-4">
                   <Turnstile
                     ref={turnstileRef}
                     onSuccess={handleSuccess}
@@ -446,7 +446,7 @@ export default function CustomerInformation({
                   />
                 </div>
                 {turnstileError && (
-                  <div className="md:col-span-2 p-3 bg-red-500/10 border border-red-500/20 rounded-lg">
+                  <div className="sm:col-span-2 p-3 bg-red-500/10 border border-red-500/20 rounded-lg">
                     <p className="text-red-400 text-sm text-center">
                       {turnstileError}
                     </p>
@@ -455,7 +455,7 @@ export default function CustomerInformation({
 
                 {/* Success confirmation */}
                 {isVerified && (
-                  <div className="md:col-span-2 p-3 bg-green-500/10 border border-green-500/20 rounded-lg">
+                  <div className="sm:col-span-2 p-3 bg-green-500/10 border border-green-500/20 rounded-lg">
                     <p className="text-green-400 text-sm text-center flex items-center justify-center">
                       <svg
                         className="w-4 h-4 mr-2"
@@ -481,7 +481,7 @@ export default function CustomerInformation({
           {/* Booking Summary */}
           <div className="lg:col-span-1">
             <div
-              className="p-8 rounded-2xl sticky top-8"
+              className="p-4 sm:p-6 lg:p-8 rounded-2xl lg:sticky lg:top-8"
               style={{
                 background:
                   "linear-gradient(135deg, rgba(107, 220, 192, 0.1) 0%, rgba(34, 211, 238, 0.1) 100%)",
@@ -489,7 +489,7 @@ export default function CustomerInformation({
                 boxShadow: "0 8px 32px rgba(107, 220, 192, 0.2)",
               }}
             >
-              <h3 className="text-2xl font-bold text-[#6bdcc0] mb-6">
+              <h3 className="text-xl sm:text-2xl font-bold text-[#6bdcc0] mb-4 sm:mb-6">
                 Booking Summary
               </h3>
 
@@ -568,21 +568,21 @@ export default function CustomerInformation({
         </div>
 
         {/* Navigation Buttons */}
-        <div className="flex flex-col sm:flex-row gap-4 sm:justify-between items-center pt-6">
-          <Button onClick={onPrevious} variant="outline" className="w-full sm:w-auto">
+        <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 sm:justify-between items-stretch sm:items-center pt-6">
+          <Button onClick={onPrevious} variant="outline" className="w-full sm:w-auto order-2 sm:order-1">
             Previous
           </Button>
           <Button
             onClick={handleSubmit}
             disabled={isNextDisabled}
             isLoading={createBookingMutation.isPending}
-            className="w-full sm:w-auto"
+            className="w-full sm:w-auto order-1 sm:order-2"
           >
             {createBookingMutation.isPending
               ? "Confirming..."
               : bookingData.service?.requiresPayment
               ? "Next: Payment"
-              : "Confirm"}
+              : "Confirm Booking"}
           </Button>
         </div>
       </div>
