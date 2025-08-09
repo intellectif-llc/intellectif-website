@@ -243,7 +243,7 @@ export default function ServiceSelection({
             }}
           >
             <span className="relative z-20 text-[#051028] group-hover:text-[#6bdcc0] transition-all duration-500 font-bold tracking-wide">
-              Continue to Date Selection
+              Continue
             </span>
             <svg
               className="w-5 h-5 ml-2 relative z-20 text-[#051028] group-hover:text-[#6bdcc0] transition-all duration-500"

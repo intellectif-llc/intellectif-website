@@ -568,20 +568,21 @@ export default function CustomerInformation({
         </div>
 
         {/* Navigation Buttons */}
-        <div className="flex justify-between items-center pt-6">
-          <Button onClick={onPrevious} variant="outline">
+        <div className="flex flex-col sm:flex-row gap-4 sm:justify-between items-center pt-6">
+          <Button onClick={onPrevious} variant="outline" className="w-full sm:w-auto">
             Previous
           </Button>
           <Button
             onClick={handleSubmit}
             disabled={isNextDisabled}
             isLoading={createBookingMutation.isPending}
+            className="w-full sm:w-auto"
           >
             {createBookingMutation.isPending
               ? "Confirming..."
               : bookingData.service?.requiresPayment
               ? "Next: Payment"
-              : "Confirm Booking"}
+              : "Confirm"}
           </Button>
         </div>
       </div>
