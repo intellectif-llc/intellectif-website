@@ -53,6 +53,10 @@ export default function Header() {
     setIsMenuOpen(!isMenuOpen);
   };
 
+  const closeMenu = () => {
+    setIsMenuOpen(false);
+  };
+
   return (
     <header
       className={`
@@ -228,6 +232,7 @@ export default function Header() {
                 >
                   <Link
                     href={item.href}
+                    onClick={closeMenu}
                     className="
                       group block w-full text-left px-5 py-4 rounded-xl
                       text-white font-medium border border-transparent
@@ -280,6 +285,7 @@ export default function Header() {
                   <div className="space-y-3">
                     <Link
                       href="/dashboard"
+                      onClick={closeMenu}
                       className="block w-full text-center py-3 px-4 rounded-xl text-white font-medium bg-[#6bdcc0]/10 border border-[#6bdcc0]/30 hover:bg-[#6bdcc0]/20 transition-all duration-300"
                     >
                       Dashboard
@@ -288,13 +294,17 @@ export default function Header() {
                     {isStaff && (
                       <Link
                         href="/availability"
+                        onClick={closeMenu}
                         className="block w-full text-center py-3 px-4 rounded-xl text-white font-medium bg-[#6bdcc0]/10 border border-[#6bdcc0]/30 hover:bg-[#6bdcc0]/20 transition-all duration-300"
                       >
                         Availability
                       </Link>
                     )}
                     <button
-                      onClick={() => signOut()}
+                      onClick={() => {
+                        signOut();
+                        closeMenu();
+                      }}
                       className="block w-full text-center py-3 px-4 rounded-xl text-white font-medium bg-red-500/10 border border-red-500/30 hover:bg-red-500/20 transition-all duration-300"
                     >
                       Sign Out
@@ -304,12 +314,14 @@ export default function Header() {
                   <div className="space-y-3">
                     <Link
                       href="/auth/signin"
+                      onClick={closeMenu}
                       className="block w-full text-center py-3 px-4 rounded-xl text-white font-medium bg-[#6bdcc0]/10 border border-[#6bdcc0]/30 hover:bg-[#6bdcc0]/20 transition-all duration-300"
                     >
                       Sign In
                     </Link>
                     <Link
                       href="/auth/signup"
+                      onClick={closeMenu}
                       className="block w-full text-center py-3 px-4 rounded-xl text-white font-medium bg-gradient-to-r from-[#6bdcc0] to-[#22d3ee] hover:from-[#22d3ee] hover:to-[#0ea5e9] transition-all duration-300"
                     >
                       Sign Up
